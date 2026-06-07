@@ -358,6 +358,34 @@ app.get('/api/get-route/:vehicleId', (req, res) => {
     }
   );
 });
+// ================= GET LATEST VEHICLE LOCATION =================
+app.get('/api/get-vehicle-location/:vehicleId', (req, res) => {
+
+  const vehicleId = req.params.vehicleId;
+
+  const sql = `
+    SELECT latitude, longitude
+    FROM vehicle_locations
+    WHERE vehicle_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `;
+
+  db.query(sql, [vehicleId], (err, result) => {
+
+    if (err) {
+      return res.status(500).json({
+        success: false
+      });
+    }
+
+    if (result.length === 0) {
+      return res.json(null);
+    }
+
+    res.json(result[0]);
+  });
+});
 // ================= VEHICLE STATUS =================
 app.get('/api/admin/vehicle-status/:vehicleId', (req, res) => {
   const vId = req.params.vehicleId;
