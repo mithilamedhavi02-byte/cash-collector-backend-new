@@ -455,6 +455,9 @@ app.get('/api/vehicle-financials/:vehicleId', (req, res) => {
     });
 });
 // ================= START SERVER =================
-app.listen(PORT, HOST, () => {
-  console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+module.exports = app;
+
+
+app.get('/', (req, res) => {
+  res.status(200).send('Cash Collector Backend is Running!');
 });
