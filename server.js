@@ -160,20 +160,33 @@ app.delete('/delete-vehicle/:id', (req, res) => {
 
 // ================= SHOPS =================
 app.post('/api/add-shop', (req, res) => {
-  const { name, address, lat, lng } = req.body;
+  const { name, address, lat, lng, phone } = req.body;
 
   db.query(
-    `INSERT INTO shops (shop_name, address, lat, lng) VALUES (?, ?, ?, ?)`,
-    [name, address, lat, lng],
-    (err) => {
-      if (err) return res.status(500).json({ status: 'error' });
+    `INSERT INTO shops (shop_name, address, lat, lng, phone)
+     VALUES (?, ?, ?, ?, ?)`,
+    [name, address, lat, lng, phone],
+    (err, result) => {
 
-      res.json({ status: 'success' ,
-      shop_id: result.insertId
+      if (err) {
+        console.log(err);
+        return res.status(500).json({
+          status: 'error',
+          message: err.message
+        });
+      }
+
+      console.log("Shop added");
+      console.log(result);
+
+      res.json({
+        status: 'success',
+        shop_id: result.insertId
       });
     }
   );
 });
+//=====get shop===//
 
 app.get('/get-shops', (req, res) => {
   db.query("SELECT * FROM shops", (err, results) => {
