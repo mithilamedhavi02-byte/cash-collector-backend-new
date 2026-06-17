@@ -168,7 +168,9 @@ app.post('/api/add-shop', (req, res) => {
     (err) => {
       if (err) return res.status(500).json({ status: 'error' });
 
-      res.json({ status: 'success' });
+      res.json({ status: 'success' ,
+      shop_id: result.insertId
+      });
     }
   );
 });
