@@ -9,16 +9,12 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*"
-  }
-});
+  }});
 
 app.use(cors());
 app.use(express.json());
 
 
-
-app.use(cors());
-app.use(express.json());
 // ================= DATABASE =================
 const db = mysql.createPool({
   host: 'payslip.lk',
@@ -120,22 +116,43 @@ app.post('/login', async (req, res) => {
 
 // ================= VEHICLES =================
 app.post('/add-vehicle', (req, res) => {
-  const { vehicle_number, vehicle_model, username, password } = req.body;
 
-  const vehicleId = parseInt(username);
+  const {
+    vehicle_number,
+    vehicle_model,
+    username,
+    password
+  } = req.body;
 
   const sql = `
     INSERT INTO vehicles
-    (vehicle_id, vehicle_number, vehicle_model, username, password)
-    VALUES (?, ?, ?, ?, ?)
+    (vehicle_number, vehicle_model, username, password)
+    VALUES (?, ?, ?, ?)
   `;
 
-  db.query(sql,
-    [vehicleId, vehicle_number, vehicle_model, username, password],
-    (err) => {
-      if (err) return res.status(500).json({ status: 'error', message: err.message });
+  db.query(
+    sql,
+    [
+      vehicle_number,
+      vehicle_model,
+      username,
+      password
+    ],
+    (err, result) => {
 
-      res.json({ status: 'success', message: 'Vehicle added' });
+      if (err) {
+        console.log(err);
+
+        return res.status(500).json({
+          status: "error",
+          message: err.message
+        });
+      }
+
+      res.json({
+        status: "success",
+        vehicle_id: result.insertId
+      });
     }
   );
 });
@@ -157,6 +174,10 @@ app.delete('/delete-vehicle/:id', (req, res) => {
     }
   );
 });
+
+
+
+
 
 // ================= SHOPS =================
 app.post('/api/add-shop', (req, res) => {
@@ -186,8 +207,10 @@ app.post('/api/add-shop', (req, res) => {
     }
   );
 });
-//=====get shop===//
 
+
+
+//===== Get Shop=====//
 app.get('/get-shops', (req, res) => {
   db.query("SELECT * FROM shops", (err, results) => {
     if (err) return res.status(500).json({ status: 'error' });
@@ -262,6 +285,8 @@ const {
   vehicleId
 } = req.body;
 
+console.log("Saving transaction for Vehicle ID:", vehicleId);
+
   db.query(
     `INSERT INTO transactions
      (shop_id, shop_name, action, total, breakdown, timestamp, vehicle_id)
@@ -290,51 +315,51 @@ const {
 
 // ================= GET LAST TRANSACTION =================
 app.get('/api/get-last-transaction/:shopId', (req, res) => {
-
   const shopId = req.params.shopId;
   const action = req.query.action;
 
-  const sql = `
-    SELECT *
-    FROM transactions
-    WHERE shop_id = ?
-    AND action = ?
-    ORDER BY timestamp DESC
-    LIMIT 1
-  `;
+  // මෙතනදී අපි මුලින්ම බලන්න ඕනේ සාප්පුවේ is_collected එක මොකක්ද කියලා
+  const checkShopStatusSql = "SELECT is_collected FROM shops WHERE shop_id = ?";
 
-  db.query(sql, [shopId, action], (err, results) => {
-
-    if (err) {
-      console.log("❌ Error:", err);
-      return res.status(500).json({
-        success: false,
-        message: err.message
-      });
+  db.query(checkShopStatusSql, [shopId], (err, shopResults) => {
+    if (err || shopResults.length === 0) {
+      return res.status(500).json({ success: false, message: "Shop not found" });
     }
 
-    if (results.length === 0) {
-      return res.json({
-        success: true,
-        transaction: null
-      });
+    const isCollected = shopResults[0].is_collected;
+
+    // සාප්පුව Collected නැත්නම් (0 නම්) කිසිදු ගනුදෙනුවක් පෙන්වන්න එපා
+    if (isCollected === 0) {
+      return res.json({ success: true, transaction: null });
     }
 
-    let transaction = results[0];
+    // සාප්පුව Collected නම් (1 නම්) පමණක් අන්තිම ගනුදෙනුව අදින්න
+    const sql = `
+      SELECT * FROM transactions
+      WHERE shop_id = ? AND action = ?
+      ORDER BY timestamp DESC LIMIT 1
+    `;
 
-    try {
-      transaction.breakdown =
-        JSON.parse(transaction.breakdown || "{}");
-    } catch (e) {
-      transaction.breakdown = {};
-    }
+    db.query(sql, [shopId, action], (err, results) => {
+      if (err) return res.status(500).json({ success: false });
 
-    res.json({
-      success: true,
-      transaction: transaction
+      if (results.length === 0) {
+        return res.json({ success: true, transaction: null });
+      }
+
+      let transaction = results[0];
+      try {
+        transaction.breakdown = JSON.parse(transaction.breakdown || "{}");
+      } catch (e) { transaction.breakdown = {}; }
+
+      res.json({ success: true, transaction: transaction });
     });
   });
 });
+
+
+
+
 //==== updaet Locasion====//
 app.post('/update-location', (req, res) => {
 
