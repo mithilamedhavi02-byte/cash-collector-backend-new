@@ -3,7 +3,7 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-
+const axios = require('axios');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -178,56 +178,156 @@ app.delete('/delete-vehicle/:id', (req, res) => {
 
 
 
+// ================= BULK ASSIGN SHOPS =================
+// ================= BULK ASSIGN SHOPS (FIXED) =================
+app.post("/assign-vehicle-shops-bulk", (req, res) => {
+  const { vehicle_id, shop_ids } = req.body;
 
-// ================= SHOPS =================
-app.post('/api/add-shop', (req, res) => {
-  const { name, address, lat, lng, phone } = req.body;
+  if (!vehicle_id || !Array.isArray(shop_ids)) {
+    return res.status(400).json({ status: "error", message: "Invalid data" });
+  }
 
-  db.query(
-    `INSERT INTO shops (shop_name, address, lat, lng, phone)
-     VALUES (?, ?, ?, ?, ?)`,
-    [name, address, lat, lng, phone],
-    (err, result) => {
+  // vehicle_id එක integer එකක් විදියට parse කරන්න
+  const cleanVehicleId = parseInt(vehicle_id);
+  if (isNaN(cleanVehicleId) || cleanVehicleId <= 0) {
+    return res.status(400).json({ status: "error", message: "Invalid vehicle_id" });
+  }
 
-      if (err) {
-        console.log(err);
-        return res.status(500).json({
-          status: 'error',
-          message: err.message
-        });
-      }
+  const values = shop_ids.map(shop_id => [cleanVehicleId, shop_id]);
 
-      console.log("Shop added");
-      console.log(result);
+  const sql = `
+    INSERT INTO vehicle_shop_map (vehicle_id, shop_id)
+    VALUES ?
+    ON DUPLICATE KEY UPDATE vehicle_id = VALUES(vehicle_id)
+  `;
 
-      res.json({
-        status: 'success',
-        shop_id: result.insertId
-      });
+  db.query(sql, [values], (err) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).json({ status: "error" });
     }
-  );
-});
 
-
-
-//===== Get Shop=====//
-app.get('/get-shops', (req, res) => {
-  db.query("SELECT * FROM shops", (err, results) => {
-    if (err) return res.status(500).json({ status: 'error' });
-
-    res.json({ status: 'success', data: results });
+    res.json({ status: "success", message: "Shops assigned" });
   });
 });
 
-app.delete('/delete-shop/:id', (req, res) => {
-  db.query("DELETE FROM shops WHERE shop_id = ?", [req.params.id],
-    (err) => {
-      if (err) return res.status(500).json({ status: 'error' });
 
-      res.json({ status: 'success' });
+// ================= SHOPS =================
+const axios = require('axios'); // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
+
+app.post('/api/add-shop', async (req, res) => {
+  const { name, address, phone } = req.body;
+  const API_KEY = 'AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A';
+
+  try {
+    // 1. Google Maps API එක හරහා Geocoding සිදු කිරීම
+    const geoResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json`, {
+      params: {
+        address: address,
+        key: API_KEY
+      }
+    });
+
+    // ලිපිනය නිවැරදිදැයි පරීක්ෂා කිරීම
+    if (!geoResponse.data.results || geoResponse.data.results.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Address not found' });
     }
-  );
+
+    const { lat, lng } = geoResponse.data.results[0].geometry.location;
+
+    // 2. Database එකට දත්ත ඇතුළත් කිරීම
+    db.query(
+      `INSERT INTO shops (shop_name, address, lat, lng, phone) VALUES (?, ?, ?, ?, ?)`,
+      [name, address, lat, lng, phone],
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          return res.status(500).json({ status: 'error', message: err.message });
+        }
+
+        console.log("Shop added with coordinates:", lat, lng);
+        res.json({
+          status: 'success',
+          shop_id: result.insertId,
+          lat: lat,
+          lng: lng
+        });
+      }
+    );
+  } catch (error) {
+    console.error("Geocoding Error:", error.message);
+    res.status(500).json({ status: 'error', message: 'Geocoding service failed' });
+  }
 });
+
+
+
+
+
+
+
+
+// ================= GET SHOPS =================
+app.get('/get-shops', (req, res) => {
+  const sql = `
+    SELECT
+      s.shop_id,
+      s.shop_name,
+      s.address,
+      s.phone,
+      s.lat,
+      s.lng,
+      s.is_collected,
+      vsm.vehicle_id
+    FROM shops s
+    LEFT JOIN vehicle_shop_map vsm
+      ON s.shop_id = vsm.shop_id
+    ORDER BY s.shop_name ASC
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).json({ status: "error" });
+    }
+
+    console.log("Raw results:", results); // Debug එකට
+
+    // vehicle_id එක parse කරන්න
+    const formattedResults = results.map(shop => {
+      let cleanVehicleId = null;
+      
+      if (shop.vehicle_id !== null && shop.vehicle_id !== undefined) {
+        // string එකක් නම් comma ඉවත් කරන්න
+        const cleaned = String(shop.vehicle_id).replace(/,/g, '').trim();
+        const parsed = parseInt(cleaned);
+        if (!isNaN(parsed) && parsed > 0) {
+          cleanVehicleId = parsed;
+        }
+      }
+      
+      console.log(`Shop ${shop.shop_id}: raw=${shop.vehicle_id}, cleaned=${cleanVehicleId}`); // Debug
+      
+      return {
+        ...shop,
+        vehicle_id: cleanVehicleId
+      };
+    });
+
+    res.json({
+      status: "success",
+      data: formattedResults
+    });
+  });
+});
+
+
+
+
+
+
+
+
 
 // ================= ASSIGN SHOPS =================
 app.post("/assign-vehicle-shops", (req, res) => {
@@ -425,6 +525,61 @@ app.get('/api/get-vehicle-location/:vehicleId', (req, res) => {
 
     res.json(result[0]);
   });
+});
+// ================= UPDATE SHOP =================
+app.put("/update-shop/:id", (req, res) => {
+
+    const id = req.params.id;
+
+    const {
+        shop_name,
+        address,
+        phone,
+        lat,
+        lng,
+        status
+    } = req.body;
+
+    const sql = `
+        UPDATE shops
+        SET
+            shop_name = ?,
+            address = ?,
+            phone = ?,
+            lat = ?,
+            lng = ?,
+            status = ?
+        WHERE shop_id = ?
+    `;
+
+    db.query(
+        sql,
+        [
+            shop_name,
+            address,
+            phone,
+            lat,
+            lng,
+            status,
+            id
+        ],
+        (err) => {
+
+            if (err) {
+                console.log(err);
+                return res.status(500).json({
+                    status: "error",
+                    message: err.message
+                });
+            }
+
+            res.json({
+                status: "success"
+            });
+
+        }
+    );
+
 });
 // ================= VEHICLE STATUS =================
 app.get('/api/admin/vehicle-status/:vehicleId', (req, res) => {
