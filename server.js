@@ -208,7 +208,7 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 
 
 // ================= SHOPS =================
-const axios = require('axios'); // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
+ // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
 
 app.post('/api/add-shop', async (req, res) => {
   const { name, address, phone } = req.body;
@@ -258,32 +258,53 @@ app.post('/api/add-shop', async (req, res) => {
 
 //===== Get Shop (Updated with s.is_collected) =====//
 app.get('/get-shops', (req, res) => {
-  // ඩේටාබේස් එකෙන් shops වගුවේ ඇති සියලුම දත්ත (s.*) සහ 
-  // විශේෂයෙන්ම s.is_collected අගය පැහැදිලිව වෙන් කර ලබා ගනී.
-  const sql = `
-    SELECT s.*, s.is_collected, vsm.vehicle_id 
-    FROM shops s
-    LEFT JOIN vehicle_shop_map vsm ON s.shop_id = vsm.shop_id
-  `;
+const sql = `
+SELECT 
+  s.shop_id,
+  s.shop_name,
+  s.address,
+  s.phone,
+  s.lat,
+  s.lng,
+  s.is_collected,
+  vsm.vehicle_id
+FROM shops s
+LEFT JOIN vehicle_shop_map vsm 
+ON s.shop_id = vsm.shop_id
+`;
 
   db.query(sql, (err, results) => {
     if (err) {
-      console.error(err);
-      return res.status(500).json({ status: 'error' });
+      console.error("❌ Get shops error:", err);
+      return res.status(500).json({ 
+        status: 'error',
+        message: 'Database query failed'
+      });
     }
-    res.json({ status: 'success', data: results });
+
+    // ===== CLEAN DATA BEFORE SENDING =====
+    const cleaned = results.map(shop => ({
+      ...shop,
+      vehicle_id:
+        shop.vehicle_id !== null &&
+        shop.vehicle_id !== undefined &&
+        shop.vehicle_id !== ""
+          ? Number(shop.vehicle_id)
+          : null,
+
+      is_collected:
+        shop.is_collected === 1 ||
+        shop.is_collected === "1" ||
+        shop.is_collected === true
+    }));
+
+    return res.json({
+      status: 'success',
+      data: cleaned
+    });
   });
 });
 
-app.delete('/delete-shop/:id', (req, res) => {
-  db.query("DELETE FROM shops WHERE shop_id = ?", [req.params.id],
-    (err) => {
-      if (err) return res.status(500).json({ status: 'error' });
-
-      res.json({ status: 'success' });
-    }
-  );
-});
 
 // ================= ASSIGN SHOPS =================
 app.post("/assign-vehicle-shops", (req, res) => {
