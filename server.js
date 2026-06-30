@@ -187,14 +187,9 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
     return res.status(400).json({ status: "error", message: "Invalid data" });
   }
 
-  // vehicle_id එක integer එකක් විදියට parse කරන්න
-  const cleanVehicleId = parseInt(vehicle_id);
-  if (isNaN(cleanVehicleId) || cleanVehicleId <= 0) {
-    return res.status(400).json({ status: "error", message: "Invalid vehicle_id" });
-  }
+  const values = shop_ids.map(shop_id => [vehicle_id, shop_id]);
 
-  const values = shop_ids.map(shop_id => [cleanVehicleId, shop_id]);
-
+  // මෙතන ON DUPLICATE KEY UPDATE එක පිටුපස vehicle_id = VALUES(vehicle_id) ලෙස වෙනස් කර ඇත
   const sql = `
     INSERT INTO vehicle_shop_map (vehicle_id, shop_id)
     VALUES ?
@@ -261,73 +256,34 @@ app.post('/api/add-shop', async (req, res) => {
 });
 
 
-
-
-
-
-
-
-// ================= GET SHOPS =================
+//===== Get Shop (Updated with s.is_collected) =====//
 app.get('/get-shops', (req, res) => {
+  // ඩේටාබේස් එකෙන් shops වගුවේ ඇති සියලුම දත්ත (s.*) සහ 
+  // විශේෂයෙන්ම s.is_collected අගය පැහැදිලිව වෙන් කර ලබා ගනී.
   const sql = `
-    SELECT
-      s.shop_id,
-      s.shop_name,
-      s.address,
-      s.phone,
-      s.lat,
-      s.lng,
-      s.is_collected,
-      vsm.vehicle_id
+    SELECT s.*, s.is_collected, vsm.vehicle_id 
     FROM shops s
-    LEFT JOIN vehicle_shop_map vsm
-      ON s.shop_id = vsm.shop_id
-    ORDER BY s.shop_name ASC
+    LEFT JOIN vehicle_shop_map vsm ON s.shop_id = vsm.shop_id
   `;
 
   db.query(sql, (err, results) => {
     if (err) {
-      console.log(err);
-      return res.status(500).json({ status: "error" });
+      console.error(err);
+      return res.status(500).json({ status: 'error' });
     }
-
-    console.log("Raw results:", results); // Debug එකට
-
-    // vehicle_id එක parse කරන්න
-    const formattedResults = results.map(shop => {
-      let cleanVehicleId = null;
-      
-      if (shop.vehicle_id !== null && shop.vehicle_id !== undefined) {
-        // string එකක් නම් comma ඉවත් කරන්න
-        const cleaned = String(shop.vehicle_id).replace(/,/g, '').trim();
-        const parsed = parseInt(cleaned);
-        if (!isNaN(parsed) && parsed > 0) {
-          cleanVehicleId = parsed;
-        }
-      }
-      
-      console.log(`Shop ${shop.shop_id}: raw=${shop.vehicle_id}, cleaned=${cleanVehicleId}`); // Debug
-      
-      return {
-        ...shop,
-        vehicle_id: cleanVehicleId
-      };
-    });
-
-    res.json({
-      status: "success",
-      data: formattedResults
-    });
+    res.json({ status: 'success', data: results });
   });
 });
 
+app.delete('/delete-shop/:id', (req, res) => {
+  db.query("DELETE FROM shops WHERE shop_id = ?", [req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ status: 'error' });
 
-
-
-
-
-
-
+      res.json({ status: 'success' });
+    }
+  );
+});
 
 // ================= ASSIGN SHOPS =================
 app.post("/assign-vehicle-shops", (req, res) => {
