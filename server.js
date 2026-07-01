@@ -233,7 +233,11 @@ app.get("/get-shops", (req, res) => {
     });
   });
 });
-// ================= ADD SHOP (OpenStreetMap Nominatim) =================
+
+
+
+
+
 // ================= ADD SHOP (Improved OpenStreetMap Nominatim) =================
 app.post("/api/add-shop", async (req, res) => {
   let { name, address, phone } = req.body;
@@ -246,59 +250,44 @@ app.post("/api/add-shop", async (req, res) => {
       });
     }
 
-    // ===== CLEAN ADDRESS (important for Sri Lanka data) =====
     const cleanAddress = address
       .replace(/\bRd\b/gi, "Road")
       .replace(/\bSt\b/gi, "Street")
       .replace(/\s+/g, " ")
       .trim();
 
-    // ===== TRY MULTI QUERY STRATEGY =====
-    const queries = [
-      `${cleanAddress}, Colombo, Sri Lanka`,
-      `${cleanAddress}, Sri Lanka`,
-      cleanAddress,
-    ];
+    const fullAddress = `${cleanAddress}, Sri Lanka`;
 
-    let geoData = null;
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || "AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A";
 
-    for (let q of queries) {
-      console.log("Trying geocode query:", q);
+    const url = `https://maps.googleapis.com/maps/api/geocode/json`;
 
-      const response = await axios.get(
-        "https://nominatim.openstreetmap.org/search",
-        {
-          params: {
-            q,
-            format: "json",
-            limit: 1,
-          },
-          headers: {
-            "User-Agent": "CashCollector/1.0 (your-email@example.com)",
-          },
-        }
-      );
+    const response = await axios.get(url, {
+      params: {
+        address: fullAddress,
+        key: apiKey
+      },
+      timeout: 8000
+    });
 
-      if (response.data && response.data.length > 0) {
-        geoData = response.data[0];
-        break;
-      }
-    }
-
-    // ===== IF NO RESULT =====
-    if (!geoData) {
+    if (
+      !response.data ||
+      response.data.status !== "OK" ||
+      response.data.results.length === 0
+    ) {
       return res.status(400).json({
         status: "error",
-        message: "Address not found. Please enter a more specific location.",
+        message: "Address not found using Google API",
       });
     }
 
-    const lat = parseFloat(geoData.lat);
-    const lng = parseFloat(geoData.lon);
+    const location = response.data.results[0].geometry.location;
 
-    console.log("Final Coordinates:", { lat, lng });
+    const lat = location.lat;
+    const lng = location.lng;
 
-    // ===== SAVE TO DATABASE =====
+    console.log("Google Coordinates:", { lat, lng });
+
     db.query(
       `INSERT INTO shops (shop_name, address, lat, lng, phone)
        VALUES (?, ?, ?, ?, ?)`,
@@ -306,7 +295,6 @@ app.post("/api/add-shop", async (req, res) => {
       (err, result) => {
         if (err) {
           console.error("DB Error:", err);
-
           return res.status(500).json({
             status: "error",
             message: "Database insert failed",
@@ -324,15 +312,16 @@ app.post("/api/add-shop", async (req, res) => {
     );
 
   } catch (error) {
-    console.error("Geocoding Error:", error.message);
+    console.error("Google Geocoding Error:", error.message);
 
     return res.status(500).json({
       status: "error",
-      message: "Geocoding service failed",
+      message: "Google geocoding service failed",
     });
   }
 });
 
+//==============================delete ====//
 app.delete("/delete-shop/:id", (req, res) => {
   db.query(
     "DELETE FROM shops WHERE shop_id = ?",
