@@ -231,9 +231,13 @@ const geoResponse = await axios.get(
 console.log("Google Response:", JSON.stringify(geoResponse.data, null, 2));
 
     // ලිපිනය නිවැරදිදැයි පරීක්ෂා කිරීම
-    if (!geoResponse.data.results || geoResponse.data.results.length === 0) {
-      return res.status(400).json({ status: 'error', message: 'Address not found' });
-    }
+  if (geoResponse.data.status !== "OK") {
+  return res.status(400).json({
+    status: "error",
+    message: geoResponse.data.status,
+    google: geoResponse.data
+  });
+}
 
     const { lat, lng } = geoResponse.data.results[0].geometry.location;
 console.log("Latitude :", lat);
