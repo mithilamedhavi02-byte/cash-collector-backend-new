@@ -209,61 +209,79 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 
 // ================= SHOPS =================
  // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
-
-app.post('/api/add-shop', async (req, res) => {
-   console.log(req.body);
+// ================= ADD SHOP (OpenStreetMap Nominatim) =================
+app.post("/api/add-shop", async (req, res) => {
   const { name, address, phone } = req.body;
-  const API_KEY = 'AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A';
- 
 
   try {
-    // 1. Google Maps API එක හරහා Geocoding සිදු කිරීම
-const geoResponse = await axios.get(
-  "https://maps.googleapis.com/maps/api/geocode/json",
-  {
-    params: {
-      address: address,
-      key: API_KEY,
-    },
-  }
-);
+    // ===== OpenStreetMap Nominatim Geocoding =====
+    const geoResponse = await axios.get(
+      "https://nominatim.openstreetmap.org/search",
+      {
+        params: {
+          q: address,
+          format: "json",
+          limit: 1,
+        },
+        headers: {
+          "User-Agent": "CashCollector/1.0 (mithilamedhavi02@gmail.com)",
+        },
+      }
+    );
 
-console.log("Google Response:", JSON.stringify(geoResponse.data, null, 2));
+    console.log("Nominatim Response:", geoResponse.data);
 
-    // ලිපිනය නිවැරදිදැයි පරීක්ෂා කිරීම
-  if (geoResponse.data.status !== "OK") {
-  return res.status(400).json({
-    status: "error",
-    message: geoResponse.data.status,
-    google: geoResponse.data
-  });
-}
+    // Address එක හමු නොවුනොත්
+    if (!geoResponse.data || geoResponse.data.length === 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "Address not found",
+      });
+    }
 
-    const { lat, lng } = geoResponse.data.results[0].geometry.location;
-console.log("Latitude :", lat);
-console.log("Longitude:", lng);
-    // 2. Database එකට දත්ත ඇතුළත් කිරීම
+    const lat = parseFloat(geoResponse.data[0].lat);
+    const lng = parseFloat(geoResponse.data[0].lon);
+
+    console.log("Latitude :", lat);
+    console.log("Longitude:", lng);
+
+    // ===== Save Shop =====
     db.query(
-      `INSERT INTO shops (shop_name, address, lat, lng, phone) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO shops
+      (shop_name, address, lat, lng, phone)
+      VALUES (?, ?, ?, ?, ?)`,
       [name, address, lat, lng, phone],
       (err, result) => {
         if (err) {
           console.log(err);
-          return res.status(500).json({ status: 'error', message: err.message });
+
+          return res.status(500).json({
+            status: "error",
+            message: err.message,
+          });
         }
 
-        console.log("Shop added with coordinates:", lat, lng);
+        console.log("Shop Added Successfully");
+
         res.json({
-          status: 'success',
+          status: "success",
           shop_id: result.insertId,
-          lat: lat,
-          lng: lng
+          lat,
+          lng,
         });
       }
     );
   } catch (error) {
-    console.error("Geocoding Error:", error.message);
-    res.status(500).json({ status: 'error', message: 'Geocoding service failed' });
+    console.error("Nominatim Error:", error.message);
+
+    if (error.response) {
+      console.error(error.response.data);
+    }
+
+    res.status(500).json({
+      status: "error",
+      message: "Geocoding service failed",
+    });
   }
 });
 
