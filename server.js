@@ -208,133 +208,106 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 
 
 // ================= SHOPS =================
+ // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
+
+app.post('/api/add-shop', async (req, res) => {
+   console.log(req.body);
+  const { name, address, phone } = req.body;
+  const API_KEY = 'AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A';
+  console.log("Google Response:", geoResponse.data);
+
+  try {
+    // 1. Google Maps API එක හරහා Geocoding සිදු කිරීම
+    const geoResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json`, {
+      params: {
+        address: address,
+        key: API_KEY
+      }
+    });
+
+    // ලිපිනය නිවැරදිදැයි පරීක්ෂා කිරීම
+    if (!geoResponse.data.results || geoResponse.data.results.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Address not found' });
+    }
+
+    const { lat, lng } = geoResponse.data.results[0].geometry.location;
+console.log("Latitude :", lat);
+console.log("Longitude:", lng);
+    // 2. Database එකට දත්ත ඇතුළත් කිරීම
+    db.query(
+      `INSERT INTO shops (shop_name, address, lat, lng, phone) VALUES (?, ?, ?, ?, ?)`,
+      [name, address, lat, lng, phone],
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          return res.status(500).json({ status: 'error', message: err.message });
+        }
+
+        console.log("Shop added with coordinates:", lat, lng);
+        res.json({
+          status: 'success',
+          shop_id: result.insertId,
+          lat: lat,
+          lng: lng
+        });
+      }
+    );
+  } catch (error) {
+    console.error("Geocoding Error:", error.message);
+    res.status(500).json({ status: 'error', message: 'Geocoding service failed' });
+  }
+});
 
 
-
-
-// ================= GET ALL SHOPS =================
-app.get("/get-shops", (req, res) => {
-  const sql = `
-    SELECT s.*, vsm.vehicle_id
-    FROM shops s
-    LEFT JOIN vehicle_shop_map vsm
-    ON s.shop_id = vsm.shop_id
-  `;
+//===== Get Shop (Updated with s.is_collected) =====//
+app.get('/get-shops', (req, res) => {
+const sql = `
+SELECT 
+  s.shop_id,
+  s.shop_name,
+  s.address,
+  s.phone,
+  s.lat,
+  s.lng,
+  s.is_collected,
+  vsm.vehicle_id
+FROM shops s
+LEFT JOIN vehicle_shop_map vsm 
+ON s.shop_id = vsm.shop_id
+`;
 
   db.query(sql, (err, results) => {
     if (err) {
-      console.log(err);
-      return res.status(500).json({ status: "error" });
+      console.error("❌ Get shops error:", err);
+      return res.status(500).json({ 
+        status: 'error',
+        message: 'Database query failed'
+      });
     }
 
-    res.json({
-      status: "success",
-      data: results
+    // ===== CLEAN DATA BEFORE SENDING =====
+    const cleaned = results.map(shop => ({
+      ...shop,
+      vehicle_id:
+        shop.vehicle_id !== null &&
+        shop.vehicle_id !== undefined &&
+        shop.vehicle_id !== ""
+          ? Number(shop.vehicle_id)
+          : null,
+
+      is_collected:
+        shop.is_collected === 1 ||
+        shop.is_collected === "1" ||
+        shop.is_collected === true
+    }));
+
+    return res.json({
+      status: 'success',
+      data: cleaned
     });
   });
 });
 
-
-
-
-
-// ================= ADD SHOP (Improved OpenStreetMap Nominatim) =================
-app.post("/api/add-shop", async (req, res) => {
-  let { name, address, phone } = req.body;
-
-  try {
-    if (!address || !name) {
-      return res.status(400).json({
-        status: "error",
-        message: "Name and Address are required",
-      });
-    }
-
-    const cleanAddress = address
-      .replace(/\bRd\b/gi, "Road")
-      .replace(/\bSt\b/gi, "Street")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    const fullAddress = `${cleanAddress}, Sri Lanka`;
-
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || "AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A";
-
-    const url = `https://maps.googleapis.com/maps/api/geocode/json`;
-
-    const response = await axios.get(url, {
-      params: {
-        address: fullAddress,
-        key: apiKey
-      },
-      timeout: 8000
-    });
-
-    if (
-      !response.data ||
-      response.data.status !== "OK" ||
-      response.data.results.length === 0
-    ) {
-      return res.status(400).json({
-        status: "error",
-        message: "Address not found using Google API",
-      });
-    }
-
-    const location = response.data.results[0].geometry.location;
-
-    const lat = location.lat;
-    const lng = location.lng;
-
-    console.log("Google Coordinates:", { lat, lng });
-
-    db.query(
-      `INSERT INTO shops (shop_name, address, lat, lng, phone)
-       VALUES (?, ?, ?, ?, ?)`,
-      [name, address, lat, lng, phone],
-      (err, result) => {
-        if (err) {
-          console.error("DB Error:", err);
-          return res.status(500).json({
-            status: "error",
-            message: "Database insert failed",
-          });
-        }
-
-        return res.json({
-          status: "success",
-          message: "Shop added successfully",
-          shop_id: result.insertId,
-          lat,
-          lng,
-        });
-      }
-    );
-
-  } catch (error) {
-    console.error("Google Geocoding Error:", error.message);
-
-    return res.status(500).json({
-      status: "error",
-      message: "Google geocoding service failed",
-    });
-  }
-});
-
-//==============================delete ====//
-app.delete("/delete-shop/:id", (req, res) => {
-  db.query(
-    "DELETE FROM shops WHERE shop_id = ?",
-    [req.params.id],
-    (err) => {
-      if (err) {
-        return res.status(500).json({ status: "error" });
-      }
-
-      res.json({ status: "success" });
-    }
-  );
-});
 
 // ================= ASSIGN SHOPS =================
 app.post("/assign-vehicle-shops", (req, res) => {
@@ -657,9 +630,7 @@ app.get('/api/vehicle-financials/:vehicleId', (req, res) => {
     });
 });
 // ================= START SERVER =================
-server.listen(PORT, HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
-});
+module.exports = app;
 
 
 app.get('/', (req, res) => {
