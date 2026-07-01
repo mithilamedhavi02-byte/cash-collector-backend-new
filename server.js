@@ -207,56 +207,137 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 });
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ================= SHOPS =================
  // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
-
 app.post('/api/add-shop', async (req, res) => {
-   console.log(req.body);
-  const { name, address, phone } = req.body;
-  const API_KEY = 'AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A';
-  console.log("Google Response:", geoResponse.data);
-
   try {
-    // 1. Google Maps API එක හරහා Geocoding සිදු කිරීම
-    const geoResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json`, {
-      params: {
-        address: address,
-        key: API_KEY
-      }
-    });
+    console.log("REQUEST BODY:", req.body);
 
-    // ලිපිනය නිවැරදිදැයි පරීක්ෂා කිරීම
-    if (!geoResponse.data.results || geoResponse.data.results.length === 0) {
-      return res.status(400).json({ status: 'error', message: 'Address not found' });
+    const { name, address, phone } = req.body;
+
+    if (!name || !address) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Name and address are required'
+      });
     }
 
-    const { lat, lng } = geoResponse.data.results[0].geometry.location;
-console.log("Latitude :", lat);
-console.log("Longitude:", lng);
-    // 2. Database එකට දත්ත ඇතුළත් කිරීම
-    db.query(
-      `INSERT INTO shops (shop_name, address, lat, lng, phone) VALUES (?, ?, ?, ?, ?)`,
-      [name, address, lat, lng, phone],
-      (err, result) => {
-        if (err) {
-          console.log(err);
-          return res.status(500).json({ status: 'error', message: err.message });
-        }
+    const API_KEY = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A';
 
-        console.log("Shop added with coordinates:", lat, lng);
-        res.json({
-          status: 'success',
-          shop_id: result.insertId,
-          lat: lat,
-          lng: lng
-        });
+    // 1. Google Geocoding request
+    const geoResponse = await axios.get(
+      'https://maps.googleapis.com/maps/api/geocode/json',
+      {
+        params: {
+          address: address,
+          key: API_KEY
+        },
+        timeout: 10000
       }
     );
+
+    console.log("Google Response status:", geoResponse.data.status);
+
+    if (
+      geoResponse.data.status !== "OK" ||
+      !geoResponse.data.results ||
+      geoResponse.data.results.length === 0
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Address not found'
+      });
+    }
+
+    const location = geoResponse.data.results[0].geometry.location;
+    const lat = location.lat;
+    const lng = location.lng;
+
+    console.log("Latitude:", lat);
+    console.log("Longitude:", lng);
+
+    // 2. DB insert
+    const sql = `
+      INSERT INTO shops (shop_name, address, lat, lng, phone)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+
+    db.query(sql, [name, address, lat, lng, phone], (err, result) => {
+      if (err) {
+        console.log("DB ERROR:", err);
+
+        return res.status(500).json({
+          status: 'error',
+          message: err.message
+        });
+      }
+
+      res.json({
+        status: 'success',
+        shop_id: result.insertId,
+        lat,
+        lng
+      });
+    });
+
   } catch (error) {
-    console.error("Geocoding Error:", error.message);
-    res.status(500).json({ status: 'error', message: 'Geocoding service failed' });
+    console.error("GEOCODING ERROR:", error.message);
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Geocoding service failed',
+      debug: error.message
+    });
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 //===== Get Shop (Updated with s.is_collected) =====//
