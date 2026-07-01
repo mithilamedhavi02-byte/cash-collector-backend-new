@@ -212,7 +212,27 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 
 
 
+// ================= GET ALL SHOPS =================
+app.get("/get-shops", (req, res) => {
+  const sql = `
+    SELECT s.*, vsm.vehicle_id
+    FROM shops s
+    LEFT JOIN vehicle_shop_map vsm
+    ON s.shop_id = vsm.shop_id
+  `;
 
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).json({ status: "error" });
+    }
+
+    res.json({
+      status: "success",
+      data: results
+    });
+  });
+});
 // ================= ADD SHOP (OpenStreetMap Nominatim) =================
 // ================= ADD SHOP (Improved OpenStreetMap Nominatim) =================
 app.post("/api/add-shop", async (req, res) => {
@@ -313,7 +333,19 @@ app.post("/api/add-shop", async (req, res) => {
   }
 });
 
+app.delete("/delete-shop/:id", (req, res) => {
+  db.query(
+    "DELETE FROM shops WHERE shop_id = ?",
+    [req.params.id],
+    (err) => {
+      if (err) {
+        return res.status(500).json({ status: "error" });
+      }
 
+      res.json({ status: "success" });
+    }
+  );
+});
 
 // ================= ASSIGN SHOPS =================
 app.post("/assign-vehicle-shops", (req, res) => {
@@ -636,7 +668,9 @@ app.get('/api/vehicle-financials/:vehicleId', (req, res) => {
     });
 });
 // ================= START SERVER =================
-module.exports = app;
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
+});
 
 
 app.get('/', (req, res) => {
