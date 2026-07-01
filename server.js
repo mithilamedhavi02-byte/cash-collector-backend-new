@@ -208,77 +208,105 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 
 
 // ================= SHOPS =================
- // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
+
+
+
+
+
 // ================= ADD SHOP (OpenStreetMap Nominatim) =================
+// ================= ADD SHOP (Improved OpenStreetMap Nominatim) =================
 app.post("/api/add-shop", async (req, res) => {
-  const { name, address, phone } = req.body;
+  let { name, address, phone } = req.body;
 
   try {
-    // ===== OpenStreetMap Nominatim Geocoding =====
-    const geoResponse = await axios.get(
-      "https://nominatim.openstreetmap.org/search",
-      {
-        params: {
-          q: address,
-          format: "json",
-          limit: 1,
-        },
-        headers: {
-          "User-Agent": "CashCollector/1.0 (mithilamedhavi02@gmail.com)",
-        },
-      }
-    );
-
-    console.log("Nominatim Response:", geoResponse.data);
-
-    // Address එක හමු නොවුනොත්
-    if (!geoResponse.data || geoResponse.data.length === 0) {
+    if (!address || !name) {
       return res.status(400).json({
         status: "error",
-        message: "Address not found",
+        message: "Name and Address are required",
       });
     }
 
-    const lat = parseFloat(geoResponse.data[0].lat);
-    const lng = parseFloat(geoResponse.data[0].lon);
+    // ===== CLEAN ADDRESS (important for Sri Lanka data) =====
+    const cleanAddress = address
+      .replace(/\bRd\b/gi, "Road")
+      .replace(/\bSt\b/gi, "Street")
+      .replace(/\s+/g, " ")
+      .trim();
 
-    console.log("Latitude :", lat);
-    console.log("Longitude:", lng);
+    // ===== TRY MULTI QUERY STRATEGY =====
+    const queries = [
+      `${cleanAddress}, Colombo, Sri Lanka`,
+      `${cleanAddress}, Sri Lanka`,
+      cleanAddress,
+    ];
 
-    // ===== Save Shop =====
+    let geoData = null;
+
+    for (let q of queries) {
+      console.log("Trying geocode query:", q);
+
+      const response = await axios.get(
+        "https://nominatim.openstreetmap.org/search",
+        {
+          params: {
+            q,
+            format: "json",
+            limit: 1,
+          },
+          headers: {
+            "User-Agent": "CashCollector/1.0 (your-email@example.com)",
+          },
+        }
+      );
+
+      if (response.data && response.data.length > 0) {
+        geoData = response.data[0];
+        break;
+      }
+    }
+
+    // ===== IF NO RESULT =====
+    if (!geoData) {
+      return res.status(400).json({
+        status: "error",
+        message: "Address not found. Please enter a more specific location.",
+      });
+    }
+
+    const lat = parseFloat(geoData.lat);
+    const lng = parseFloat(geoData.lon);
+
+    console.log("Final Coordinates:", { lat, lng });
+
+    // ===== SAVE TO DATABASE =====
     db.query(
-      `INSERT INTO shops
-      (shop_name, address, lat, lng, phone)
-      VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO shops (shop_name, address, lat, lng, phone)
+       VALUES (?, ?, ?, ?, ?)`,
       [name, address, lat, lng, phone],
       (err, result) => {
         if (err) {
-          console.log(err);
+          console.error("DB Error:", err);
 
           return res.status(500).json({
             status: "error",
-            message: err.message,
+            message: "Database insert failed",
           });
         }
 
-        console.log("Shop Added Successfully");
-
-        res.json({
+        return res.json({
           status: "success",
+          message: "Shop added successfully",
           shop_id: result.insertId,
           lat,
           lng,
         });
       }
     );
+
   } catch (error) {
-    console.error("Nominatim Error:", error.message);
+    console.error("Geocoding Error:", error.message);
 
-    if (error.response) {
-      console.error(error.response.data);
-    }
-
-    res.status(500).json({
+    return res.status(500).json({
       status: "error",
       message: "Geocoding service failed",
     });
@@ -286,76 +314,6 @@ app.post("/api/add-shop", async (req, res) => {
 });
 
 
-//===== Get Shop (Updated with s.is_collected) =====//
-app.get('/get-shops', (req, res) => {
-const sql = `
-SELECT 
-  s.shop_id,
-  s.shop_name,
-  s.address,
-  s.phone,
-  s.lat,
-  s.lng,
-  s.is_collected,
-  vsm.vehicle_id
-FROM shops s
-LEFT JOIN vehicle_shop_map vsm 
-ON s.shop_id = vsm.shop_id
-`;
-
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.error("❌ Get shops error:", err);
-      return res.status(500).json({ 
-        status: 'error',
-        message: 'Database query failed'
-      });
-    }
-
-    // ===== CLEAN DATA BEFORE SENDING =====
-    const cleaned = results.map(shop => ({
-      ...shop,
-      vehicle_id:
-        shop.vehicle_id !== null &&
-        shop.vehicle_id !== undefined &&
-        shop.vehicle_id !== ""
-          ? Number(shop.vehicle_id)
-          : null,
-
-      is_collected:
-        shop.is_collected === 1 ||
-        shop.is_collected === "1" ||
-        shop.is_collected === true
-    }));
-
-    return res.json({
-      status: 'success',
-      data: cleaned
-    });
-  });
-});
-app.delete("/delete-shop/:id", (req, res) => {
-
-    db.query(
-        "DELETE FROM shops WHERE shop_id=?",
-        [req.params.id],
-        (err)=>{
-
-            if(err){
-                return res.status(500).json({
-                    status:"error",
-                    message:err.message
-                });
-            }
-
-            res.json({
-                status:"success"
-            });
-
-        }
-    );
-
-});
 
 // ================= ASSIGN SHOPS =================
 app.post("/assign-vehicle-shops", (req, res) => {
