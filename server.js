@@ -211,17 +211,24 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
  // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
 
 app.post('/api/add-shop', async (req, res) => {
+   console.log(req.body);
   const { name, address, phone } = req.body;
   const API_KEY = 'AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A';
+ 
 
   try {
     // 1. Google Maps API එක හරහා Geocoding සිදු කිරීම
-    const geoResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json`, {
-      params: {
-        address: address,
-        key: API_KEY
-      }
-    });
+const geoResponse = await axios.get(
+  "https://maps.googleapis.com/maps/api/geocode/json",
+  {
+    params: {
+      address: address,
+      key: API_KEY,
+    },
+  }
+);
+
+console.log("Google Response:", JSON.stringify(geoResponse.data, null, 2));
 
     // ලිපිනය නිවැරදිදැයි පරීක්ෂා කිරීම
     if (!geoResponse.data.results || geoResponse.data.results.length === 0) {
@@ -229,7 +236,8 @@ app.post('/api/add-shop', async (req, res) => {
     }
 
     const { lat, lng } = geoResponse.data.results[0].geometry.location;
-
+console.log("Latitude :", lat);
+console.log("Longitude:", lng);
     // 2. Database එකට දත්ත ඇතුළත් කිරීම
     db.query(
       `INSERT INTO shops (shop_name, address, lat, lng, phone) VALUES (?, ?, ?, ?, ?)`,
@@ -304,7 +312,28 @@ ON s.shop_id = vsm.shop_id
     });
   });
 });
+app.delete("/delete-shop/:id", (req, res) => {
 
+    db.query(
+        "DELETE FROM shops WHERE shop_id=?",
+        [req.params.id],
+        (err)=>{
+
+            if(err){
+                return res.status(500).json({
+                    status:"error",
+                    message:err.message
+                });
+            }
+
+            res.json({
+                status:"success"
+            });
+
+        }
+    );
+
+});
 
 // ================= ASSIGN SHOPS =================
 app.post("/assign-vehicle-shops", (req, res) => {
