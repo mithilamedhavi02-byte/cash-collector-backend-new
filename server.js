@@ -225,89 +225,69 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 
 
 
-// ================= SHOPS =================
- // මෙය ඔබේ ගොනුවේ ඉහළින්ම ඇතුළත් කරන්න
-app.post('/api/add-shop', async (req, res) => {
-  try {
-    console.log("REQUEST BODY:", req.body);
 
+
+
+app.post("/api/add-shop", async (req, res) => {
+  try {
     const { name, address, phone } = req.body;
 
     if (!name || !address) {
       return res.status(400).json({
-        status: 'error',
-        message: 'Name and address are required'
+        status: "error",
+        message: "Name and address required",
       });
     }
 
-    const API_KEY = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A';
-
-    // 1. Google Geocoding request
+    // 1. Call Google Geocoding API
     const geoResponse = await axios.get(
-      'https://maps.googleapis.com/maps/api/geocode/json',
+      "https://maps.googleapis.com/maps/api/geocode/json",
       {
         params: {
           address: address,
-          key: API_KEY
+          key: "AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A",
         },
-        timeout: 10000
       }
     );
 
-    console.log("Google Response status:", geoResponse.data.status);
+    const location = geoResponse.data.results[0]?.geometry?.location;
 
-    if (
-      geoResponse.data.status !== "OK" ||
-      !geoResponse.data.results ||
-      geoResponse.data.results.length === 0
-    ) {
+    if (!location) {
       return res.status(400).json({
-        status: 'error',
-        message: 'Address not found'
+        status: "error",
+        message: "Invalid address",
       });
     }
 
-    const location = geoResponse.data.results[0].geometry.location;
     const lat = location.lat;
     const lng = location.lng;
 
-    console.log("Latitude:", lat);
-    console.log("Longitude:", lng);
+    // 2. Save to DB
+    const sql =
+      "INSERT INTO shops (name, address, phone, lat, lng) VALUES (?, ?, ?, ?, ?)";
 
-    // 2. DB insert
-    const sql = `
-      INSERT INTO shops (shop_name, address, lat, lng, phone)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-
-    db.query(sql, [name, address, lat, lng, phone], (err, result) => {
+    db.query(sql, [name, address, phone, lat, lng], (err) => {
       if (err) {
-        console.log("DB ERROR:", err);
-
-        return res.status(500).json({
-          status: 'error',
-          message: err.message
-        });
+        return res.status(500).json({ status: "error", err });
       }
 
-      res.json({
-        status: 'success',
-        shop_id: result.insertId,
-        lat,
-        lng
+      return res.json({
+        status: "success",
+        message: "Shop added with coordinates",
+        data: { lat, lng },
       });
     });
-
   } catch (error) {
-    console.error("GEOCODING ERROR:", error.message);
-
+    console.error(error);
     res.status(500).json({
-      status: 'error',
-      message: 'Geocoding service failed',
-      debug: error.message
+      status: "error",
+      message: "Server error",
     });
   }
 });
+
+
+
 
 
 
@@ -522,25 +502,18 @@ app.get('/api/get-last-transaction/:shopId', (req, res) => {
 
 
 //==== updaet Locasion====//
-app.post('/update-location', (req, res) => {
 
+app.post('/update-location', (req, res) => {
     const { vehicle_id, latitude, longitude } = req.body;
 
-    console.log("Received data:", req.body);
-    console.log(vehicle_id);
-    console.log(latitude);
-    console.log(longitude);
-
-
-
-const sql = "INSERT INTO vehicle_locations (vehicle_id, latitude, longitude, created_at) VALUES (?, ?, ?, NOW())";
+    const sql = "INSERT INTO vehicle_locations (vehicle_id, latitude, longitude, created_at) VALUES (?, ?, ?, NOW())";
 
     db.query(sql, [vehicle_id, latitude, longitude], (err, result) => {
-        if (err) {
-            console.error("Database Error:", err);
-            return res.status(500).send("Database error");
-        }
-        console.log("Data inserted successfully!");
+        if (err) return res.status(500).send("Database error");
+        
+        // SOCKET හරහා live update යැවීම
+        io.emit(`vehicle_${vehicle_id}_update`, { latitude, longitude });
+        
         res.send({ success: true });
     });
 });
@@ -586,6 +559,48 @@ app.get('/api/get-vehicle-location/:vehicleId', (req, res) => {
 
     res.json(result[0]);
   });
+});
+
+// ================= DELETE SHOP =================
+
+app.delete("/delete-shop/:id", (req, res) => {
+
+    const shopId = req.params.id;
+
+    db.query(
+        "DELETE FROM vehicle_shop_map WHERE shop_id=?",
+        [shopId],
+        (err) => {
+
+            if (err) {
+                return res.status(500).json({
+                    status: "error",
+                    message: err.message
+                });
+            }
+
+            db.query(
+                "DELETE FROM shops WHERE shop_id=?",
+                [shopId],
+                (err2) => {
+
+                    if (err2) {
+                        return res.status(500).json({
+                            status: "error",
+                            message: err2.message
+                        });
+                    }
+
+                    res.json({
+                        status: "success"
+                    });
+
+                }
+            );
+
+        }
+    );
+
 });
 // ================= UPDATE SHOP =================
 app.put("/update-shop/:id", (req, res) => {
