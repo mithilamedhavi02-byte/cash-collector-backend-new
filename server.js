@@ -1,5 +1,5 @@
 const express = require('express');
-const express = require("express");
+
 require("dotenv").config();
 const mysql = require('mysql2');
 const cors = require('cors');
@@ -15,7 +15,7 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
-require("dotenv").config();
+
 console.log("API KEY =", process.env.GOOGLE_MAPS_API_KEY);
 
 // ================= DATABASE =================
