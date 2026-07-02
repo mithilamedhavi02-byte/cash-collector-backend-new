@@ -13,7 +13,7 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
-
+require("dotenv").config();
 
 // ================= DATABASE =================
 const db = mysql.createPool({
@@ -227,69 +227,150 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 
 
 
-
 app.post("/api/add-shop", async (req, res) => {
   try {
     const { name, address, phone } = req.body;
 
-    if (!name || !address) {
+    console.log("======================================");
+    console.log("NEW SHOP REQUEST");
+    console.log("Name    :", name);
+    console.log("Address :", address);
+    console.log("Phone   :", phone);
+    console.log("======================================");
+
+    // ================= VALIDATION =================
+    if (!name || !address || !phone) {
       return res.status(400).json({
         status: "error",
-        message: "Name and address required",
+        message: "Name, address and phone are required",
       });
     }
 
-    // 1. Call Google Geocoding API
+    // ================= CHECK API KEY =================
+    if (!process.env.GOOGLE_MAPS_API_KEY) {
+      console.log("GOOGLE_MAPS_API_KEY NOT FOUND");
+
+      return res.status(500).json({
+        status: "error",
+        message: "Google API Key not configured",
+      });
+    }
+
+    console.log("Calling Google Geocoding API...");
+
+    // ================= GOOGLE GEOCODING =================
     const geoResponse = await axios.get(
       "https://maps.googleapis.com/maps/api/geocode/json",
       {
         params: {
           address: address,
-          key: "AIzaSyAC1wMXxyCpYVtaBGbGjdmEx_I7j_M0H1A",
+          key: process.env.GOOGLE_MAPS_API_KEY,
         },
+        timeout: 10000,
       }
     );
+console.log("Address:", address);
+console.log("Google Response:", JSON.stringify(geoResponse.data, null, 2));
+    console.log("========== GOOGLE RESPONSE ==========");
+    console.log(JSON.stringify(geoResponse.data, null, 2));
+    console.log("=====================================");
 
-    const location = geoResponse.data.results[0]?.geometry?.location;
-
-    if (!location) {
+    // Google API Error
+    if (geoResponse.data.status !== "OK") {
       return res.status(400).json({
         status: "error",
-        message: "Invalid address",
+        message:
+            geoResponse.data.error_message ||
+            geoResponse.data.status ||
+            "Invalid address",
       });
     }
+
+    if (
+      !geoResponse.data.results ||
+      geoResponse.data.results.length === 0
+    ) {
+      return res.status(400).json({
+        status: "error",
+        message: "Address not found",
+      });
+    }
+
+    const location = geoResponse.data.results[0].geometry.location;
 
     const lat = location.lat;
     const lng = location.lng;
 
-    // 2. Save to DB
-    const sql =
-      "INSERT INTO shops (name, address, phone, lat, lng) VALUES (?, ?, ?, ?, ?)";
+    console.log("Latitude :", lat);
+    console.log("Longitude:", lng);
 
-    db.query(sql, [name, address, phone, lat, lng], (err) => {
-      if (err) {
-        return res.status(500).json({ status: "error", err });
+    // ================= SAVE TO DATABASE =================
+    const sql = `
+      INSERT INTO shops
+      (
+        shop_name,
+        address,
+        phone,
+        lat,
+        lng
+      )
+      VALUES
+      (?, ?, ?, ?, ?)
+    `;
+
+    db.query(
+      sql,
+      [
+        name,
+        address,
+        phone,
+        lat,
+        lng
+      ],
+      (err, result) => {
+
+        if (err) {
+          console.log("DATABASE ERROR");
+          console.log(err);
+
+          return res.status(500).json({
+            status: "error",
+            message: err.message,
+          });
+        }
+
+        console.log("SHOP SAVED SUCCESSFULLY");
+        console.log("Shop ID :", result.insertId);
+
+        return res.status(200).json({
+          status: "success",
+          message: "Shop added successfully",
+          shop_id: result.insertId,
+          lat: lat,
+          lng: lng,
+        });
       }
+    );
 
-      return res.json({
-        status: "success",
-        message: "Shop added with coordinates",
-        data: { lat, lng },
-      });
-    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
+
+    console.log("======================================");
+    console.log("SERVER ERROR");
+    console.log(error.message);
+
+    if (error.response) {
+      console.log("Google Response:");
+      console.log(JSON.stringify(error.response.data, null, 2));
+    }
+
+    console.log("======================================");
+
+    return res.status(500).json({
       status: "error",
-      message: "Server error",
+      message: error.message,
     });
   }
 });
-
-
-
-
-
 
 
 
