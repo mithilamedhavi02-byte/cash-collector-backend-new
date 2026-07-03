@@ -18,6 +18,13 @@ app.use(express.json());
 
 console.log("API KEY =", process.env.GOOGLE_MAPS_API_KEY);
 
+
+
+
+
+
+
+
 // ================= DATABASE =================
 const db = mysql.createPool({
   host: 'payslip.lk',
@@ -87,6 +94,21 @@ io.on("connection", (socket) => {
     console.log(" Driver disconnected:", socket.id);
   });
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ================= LOGIN =================
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -116,6 +138,30 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ================= VEHICLES =================
 app.post('/add-vehicle', (req, res) => {
@@ -181,6 +227,11 @@ app.delete('/delete-vehicle/:id', (req, res) => {
 
 
 
+
+
+
+
+
 // ================= BULK ASSIGN SHOPS =================
 // ================= BULK ASSIGN SHOPS (FIXED) =================
 app.post("/assign-vehicle-shops-bulk", (req, res) => {
@@ -232,70 +283,44 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 
 app.post("/api/add-shop", async (req, res) => {
   try {
-    const { name, address, phone } = req.body;
 
-    console.log("======================================");
-    console.log("NEW SHOP REQUEST");
-    console.log("Name    :", name);
-    console.log("Address :", address);
-    console.log("Phone   :", phone);
-    console.log("======================================");
+    const {
+      name,
+      owner_name,
+      address,
+      phone,
+      whatsapp,
+      agreement_start,
+      agreement_period,
+      agreement_type,
+      collection_frequency,
+      collection_days,
+      collection_time,
+      notes
+    } = req.body;
 
-    // ================= VALIDATION =================
     if (!name || !address || !phone) {
       return res.status(400).json({
         status: "error",
-        message: "Name, address and phone are required",
+        message: "Missing required fields"
       });
     }
 
-    // ================= CHECK API KEY =================
-    if (!process.env.GOOGLE_MAPS_API_KEY) {
-      console.log("GOOGLE_MAPS_API_KEY NOT FOUND");
-
-      return res.status(500).json({
-        status: "error",
-        message: "Google API Key not configured",
-      });
-    }
-
-    console.log("Calling Google Geocoding API...");
-
-    // ================= GOOGLE GEOCODING =================
+    // ================= GEOCODE =================
     const geoResponse = await axios.get(
       "https://maps.googleapis.com/maps/api/geocode/json",
       {
         params: {
-          address: address,
+          address,
           key: process.env.GOOGLE_MAPS_API_KEY,
         },
-        timeout: 10000,
       }
     );
-console.log("Address:", address);
-console.log("Google Response:", JSON.stringify(geoResponse.data, null, 2));
-    console.log("========== GOOGLE RESPONSE ==========");
-    console.log(JSON.stringify(geoResponse.data, null, 2));
-    console.log("=====================================");
 
-    // Google API Error
     if (geoResponse.data.status !== "OK") {
       return res.status(400).json({
         status: "error",
-        message:
-            geoResponse.data.error_message ||
-            geoResponse.data.status ||
-            "Invalid address",
-      });
-    }
-
-    if (
-      !geoResponse.data.results ||
-      geoResponse.data.results.length === 0
-    ) {
-      return res.status(400).json({
-        status: "error",
-        message: "Address not found",
+        message: "Invalid address"
       });
     }
 
@@ -304,101 +329,103 @@ console.log("Google Response:", JSON.stringify(geoResponse.data, null, 2));
     const lat = location.lat;
     const lng = location.lng;
 
-    console.log("Latitude :", lat);
-    console.log("Longitude:", lng);
+    // ================= AGREEMENT END =================
+    let agreement_end = null;
 
-    // ================= SAVE TO DATABASE =================
+    if (agreement_start && agreement_period && agreement_type) {
+      const start = new Date(agreement_start);
+
+      if (agreement_type === "Month") {
+        start.setMonth(start.getMonth() + Number(agreement_period));
+      } else {
+        start.setFullYear(start.getFullYear() + Number(agreement_period));
+      }
+
+      agreement_end = start.toISOString().split("T")[0];
+    }
+
+    // ================= INSERT SHOP =================
     const sql = `
-      INSERT INTO shops
-      (
+      INSERT INTO shops (
         shop_name,
+        owner_name,
         address,
         phone,
+        whatsapp,
         lat,
-        lng
+        lng,
+        agreement_start,
+        agreement_end,
+        agreement_period,
+        agreement_type,
+        collection_frequency,
+        collection_time,
+        notes
       )
-      VALUES
-      (?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.query(
       sql,
       [
         name,
+        owner_name,
         address,
         phone,
+        whatsapp,
         lat,
-        lng
+        lng,
+        agreement_start,
+        agreement_end,
+        agreement_period,
+        agreement_type,
+        collection_frequency,
+        collection_time,
+        notes
       ],
       (err, result) => {
 
         if (err) {
-          console.log("DATABASE ERROR");
           console.log(err);
-
           return res.status(500).json({
             status: "error",
-            message: err.message,
+            message: err.message
           });
         }
 
-        console.log("SHOP SAVED SUCCESSFULLY");
-        console.log("Shop ID :", result.insertId);
+        const shopId = result.insertId;
 
-        return res.status(200).json({
+        // ================= SAVE COLLECTION DAYS =================
+        if (collection_days && collection_days.length > 0) {
+          const values = collection_days.map(day => [
+            shopId,
+            day
+          ]);
+
+          db.query(
+            `INSERT INTO shop_collection_days (shop_id, day_name) VALUES ?`,
+            [values]
+          );
+        }
+
+        return res.json({
           status: "success",
-          message: "Shop added successfully",
-          shop_id: result.insertId,
-          lat: lat,
-          lng: lng,
+          shop_id: shopId,
+          lat,
+          lng,
+          agreement_end
         });
       }
     );
 
-  } catch (error) {
-
-    console.log("======================================");
-    console.log("SERVER ERROR");
-    console.log(error.message);
-
-    if (error.response) {
-      console.log("Google Response:");
-      console.log(JSON.stringify(error.response.data, null, 2));
-    }
-
-    console.log("======================================");
-
-    return res.status(500).json({
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
       status: "error",
-      message: error.message,
+      message: err.message
     });
   }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -454,6 +481,39 @@ ON s.shop_id = vsm.shop_id
 });
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ================= ASSIGN SHOPS =================
 app.post("/assign-vehicle-shops", (req, res) => {
   const { vehicle_id, shop_id } = req.body;
@@ -479,6 +539,38 @@ app.post("/assign-vehicle-shops", (req, res) => {
     );
   });
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ================= VEHICLE SHOPS =================
 app.get("/get-vehicle-shops/:vehicle_id", (req, res) => {
