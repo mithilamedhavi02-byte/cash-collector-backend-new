@@ -393,26 +393,92 @@ app.post("/api/add-shop", async (req, res) => {
 
         const shopId = result.insertId;
 
+
+
+        
+
         // ================= SAVE COLLECTION DAYS =================
-        if (collection_days && collection_days.length > 0) {
-          const values = collection_days.map(day => [
-            shopId,
-            day
-          ]);
+   // ================= SAVE COLLECTION DAYS =================
+if (collection_days && collection_days.length > 0) {
 
-          db.query(
-            `INSERT INTO shop_collection_days (shop_id, day_name) VALUES ?`,
-            [values]
-          );
+  const values = collection_days.map(day => [
+    shopId,
+    day
+  ]);
+
+  db.query(
+    `INSERT INTO shop_collection_days (shop_id, day_name) VALUES ?`,
+    [values],
+    (err) => {
+      if (err) {
+        console.log(err);
+      }
+    }
+  );
+
+  // ================= CREATE COLLECTION SCHEDULE =================
+  const today = new Date();
+
+  collection_days.forEach((dayName) => {
+
+    const days = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ];
+
+    const targetDay = days.indexOf(dayName);
+
+    let nextDate = new Date(today);
+
+    while (nextDate.getDay() !== targetDay) {
+      nextDate.setDate(nextDate.getDate() + 1);
+    }
+
+    const collectionDate =
+      nextDate.getFullYear() + "-" +
+      String(nextDate.getMonth() + 1).padStart(2, "0") + "-" +
+      String(nextDate.getDate()).padStart(2, "0");
+
+    db.query(
+      `
+      INSERT INTO collection_schedule
+      (
+        shop_id,
+        vehicle_id,
+        collection_date,
+        collection_time,
+        status
+      )
+      VALUES (?, NULL, ?, ?, 'Pending')
+      `,
+      [
+        shopId,
+        collectionDate,
+        collection_time
+      ],
+      (err) => {
+        if (err) {
+          console.log("Schedule Insert Error :", err);
         }
+      }
+    );
 
-        return res.json({
-          status: "success",
-          shop_id: shopId,
-          lat,
-          lng,
-          agreement_end
-        });
+  });
+
+}
+
+return res.json({
+  status: "success",
+  shop_id: shopId,
+  lat,
+  lng,
+  agreement_end
+});
       }
     );
 
@@ -1089,7 +1155,37 @@ app.get('/api/vehicle-financials/:vehicleId', (req, res) => {
     });
 });
 
+app.post("/api/add-schedule", (req, res) => {
+  const {
+    shop_id,
+    vehicle_id,
+    collection_date,
+    collection_time
+  } = req.body;
 
+  const sql = `
+    INSERT INTO collection_schedule
+    (shop_id, vehicle_id, collection_date, collection_time, status)
+    VALUES (?, ?, ?, ?, 'Pending')
+  `;
+
+  db.query(
+    sql,
+    [shop_id, vehicle_id, collection_date, collection_time],
+    (err, result) => {
+      if (err) {
+        return res.status(500).json({
+          status: "error",
+          message: err.message
+        });
+      }
+
+      res.json({
+        status: "success"
+      });
+    }
+  );
+});
 // ======================================
 // CALENDAR SHOPS
 // ======================================
