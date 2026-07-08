@@ -296,7 +296,9 @@ app.post("/api/add-shop", async (req, res) => {
       collection_time,
       notes
     } = req.body;
-
+console.log("Request Body:", req.body);
+console.log("Collection Days:", collection_days);
+console.log("Collection Time:", collection_time);
     if (!name || !address || !phone) {
       return res.status(400).json({
         status: "error",
@@ -397,6 +399,13 @@ app.post("/api/add-shop", async (req, res) => {
 
         
 
+
+
+
+
+
+
+        
         // ================= SAVE COLLECTION DAYS =================
    // ================= SAVE COLLECTION DAYS =================
 if (collection_days && collection_days.length > 0) {
@@ -443,7 +452,10 @@ if (collection_days && collection_days.length > 0) {
       nextDate.getFullYear() + "-" +
       String(nextDate.getMonth() + 1).padStart(2, "0") + "-" +
       String(nextDate.getDate()).padStart(2, "0");
-
+console.log("Creating schedule...");
+console.log(shopId);
+console.log(collection_days);
+console.log(collection_time);
     db.query(
       `
       INSERT INTO collection_schedule
@@ -461,14 +473,39 @@ if (collection_days && collection_days.length > 0) {
         collectionDate,
         collection_time
       ],
-      (err) => {
-        if (err) {
-          console.log("Schedule Insert Error :", err);
-        }
-      }
+    (err) => {
+
+  if (err) {
+
+    console.log("Schedule Insert Error :", err);
+
+  } else {
+
+    console.log("✅ Schedule inserted successfully");
+    console.log("Date:", collectionDate);
+    console.log("Shop ID:", shopId);
+
+  }
+
+}
     );
 
-  });
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+);
 
 }
 
@@ -489,7 +526,14 @@ return res.json({
       message: err.message
     });
   }
+
+  
 });
+
+
+
+
+
 
 
 
