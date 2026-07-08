@@ -31,6 +31,16 @@ console.log(
 
 
 
+
+
+
+
+
+
+
+
+
+
 // ================= DATABASE =================
 
 const db = mysql.createPool({
@@ -71,26 +81,38 @@ db.getConnection((err, connection) => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ================= CONFIG =================
 
 const PORT = 3000;
 const HOST = "0.0.0.0";
-
-
-
 
 // ================= SOCKET LIVE LOCATION =================
 
 
 io.on("connection", (socket) => {
 
-
   console.log(
     "Driver Connected:",
     socket.id
   );
-
-
 
   socket.on(
     "driver_location",
@@ -103,8 +125,6 @@ io.on("connection", (socket) => {
         longitude
       } = data;
 
-
-
       if (!vehicle_id || !latitude || !longitude) {
 
         console.log(
@@ -114,9 +134,6 @@ io.on("connection", (socket) => {
         return;
 
       }
-
-
-
 
       console.log("======================");
 
@@ -141,9 +158,6 @@ io.on("connection", (socket) => {
       );
 
       console.log("======================");
-
-
-
 
 
       db.query(
@@ -505,6 +519,19 @@ app.get('/api/vehicles',
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ================= DELETE VEHICLE =================
 
 
@@ -559,6 +586,30 @@ WHERE vehicle_id=?
 
 
   });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ================= VEHICLES =================
 
 app.post('/add-vehicle', (req, res) => {
@@ -621,6 +672,9 @@ app.post('/add-vehicle', (req, res) => {
 
 
 
+
+
+
 app.get('/api/vehicles', (req, res) => {
 
 
@@ -651,6 +705,18 @@ app.get('/api/vehicles', (req, res) => {
 
 
 });
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -800,33 +866,29 @@ app.post("/assign-vehicle-shops-bulk", (req, res) => {
 // ================= ADD SHOP =================
 
 
-app.post("/api/add-shop", async (req, res) => {
+app.post("/api/add-shop", async (req,res)=>{
+
+try {
+
+const {
+name,
+owner_name,
+address,
+phone,
+whatsapp,
+agreement_start,
+agreement_period,
+agreement_type,
+collection_frequency,
+collection_days,
+collection_time,
+notes
+
+}=req.body;
 
 
-  try {
+console.log("COLLECTION DAYS:", collection_days);
 
-
-    const {
-
-      name,
-      owner_name,
-      address,
-      phone,
-      whatsapp,
-      agreement_start,
-      agreement_period,
-      agreement_type,
-      collection_frequency,
-      collection_days,
-      collection_time,
-      notes
-
-    } = req.body;
-
-
-
-
-    console.log("Request Body:", req.body);
 
     console.log(
       "Collection Days:",
@@ -1066,44 +1128,46 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 
 
 
-
+console.log("====== SCHEDULE DEBUG ======");
+console.log("Shop ID:", shopId);
+console.log("Days:", collection_days);
+console.log("Start:", agreement_start);
+console.log("End:", agreement_end);
+console.log("Time:", collection_time);
+console.log("============================");
 
         // COLLECTION DAYS SAVE
 
-        if (collection_days && collection_days.length > 0) {
+  if (collection_days && collection_days.length > 0) {
 
 
-          const values =
-            collection_days.map(day => [
+const values =
+collection_days.map(day => [
 
-              shopId,
+shopId,
+day
 
-              day
-
-            ]);
-
+]);
 
 
-          db.query(
-
-            `INSERT INTO shop_collection_days
+db.query(
+`
+INSERT INTO shop_collection_days
 (shop_id,day_name)
-VALUES ?`,
-
-            [values],
-
-            (err) => {
-
-
-              if (err)
-
-                console.log(err);
+VALUES ?
+`,
+[values]
+);
 
 
-            }
 
 
-          );
+
+
+
+
+
+
 
 
 
@@ -1124,18 +1188,11 @@ VALUES ?`,
           ];
 
 
-
-
-
           const startDate = agreement_start
 
             ? new Date(agreement_start)
 
             : new Date();
-
-
-
-
 
           const endDate = agreement_end
 
@@ -1152,22 +1209,10 @@ VALUES ?`,
             );
 
 
-
-
-
           let currentDate = new Date(startDate);
 
-
-
           let scheduleValues = [];
-
-
-
-
-
           while (currentDate <= endDate) {
-
-
 
             const currentDay =
 
@@ -1242,11 +1287,6 @@ VALUES ?`,
 
           }
 
-
-
-
-
-
           console.log("==============================");
 
           console.log("Creating Collection Schedule");
@@ -1267,7 +1307,10 @@ VALUES ?`,
 
 
 
-
+console.log(
+"GENERATED SCHEDULE VALUES:",
+scheduleValues
+);
 
           // ================= INSERT SCHEDULE =================
 
@@ -2815,14 +2858,14 @@ WHERE shop_id=?
 });
 // ================= VEHICLE STATUS =================
 
-app.get('/api/admin/vehicle-status/:vehicleId',(req,res)=>{
+app.get('/api/admin/vehicle-status/:vehicleId', (req, res) => {
 
 
-const vId=req.params.vehicleId;
+  const vId = req.params.vehicleId;
 
 
 
-const sqlTotal=`
+  const sqlTotal = `
 
 SELECT SUM(total) AS total_sum
 
@@ -2845,7 +2888,7 @@ WHERE vehicle_id=?
 
 
 
-const sqlLoc=`
+  const sqlLoc = `
 
 SELECT latitude,longitude
 
@@ -2862,60 +2905,60 @@ LIMIT 1
 
 
 
-db.query(
+  db.query(
 
-sqlTotal,
+    sqlTotal,
 
-[vId],
+    [vId],
 
-(err,sumRes)=>{
-
-
-db.query(
-
-sqlLoc,
-
-[vId],
-
-(err2,locRes)=>{
+    (err, sumRes) => {
 
 
-res.json({
+      db.query(
 
-total_sum:
+        sqlLoc,
 
-sumRes[0].total_sum || 0,
+        [vId],
 
-
-location:
-
-locRes.length>0
-
-?
-
-locRes[0]
-
-:
-
-null
+        (err2, locRes) => {
 
 
-});
+          res.json({
+
+            total_sum:
+
+              sumRes[0].total_sum || 0,
 
 
-}
+            location:
+
+              locRes.length > 0
+
+                ?
+
+                locRes[0]
+
+                :
+
+                null
 
 
+          });
 
-);
+
+        }
 
 
 
-}
+      );
 
 
 
-);
+    }
+
+
+
+  );
 
 
 
@@ -2935,27 +2978,27 @@ null
 // ================= ADMIN TOTAL =================
 
 
-app.get('/api/admin/get-total-collected',async(req,res)=>{
+app.get('/api/admin/get-total-collected', async (req, res) => {
 
 
-try{
+  try {
 
 
-const today=
+    const today =
 
-new Date()
+      new Date()
 
-.toISOString()
+        .toISOString()
 
-.split('T')[0];
-
-
+        .split('T')[0];
 
 
 
-const [result]=await db.promise().query(
 
-`
+
+    const [result] = await db.promise().query(
+
+      `
 
 SELECT SUM(total) AS grandTotal
 
@@ -2965,36 +3008,36 @@ WHERE DATE(timestamp)=?
 
 `,
 
-[today]
+      [today]
 
-);
-
-
-
-
-res.json({
-
-grandTotal:
-
-result[0].grandTotal || 0
-
-});
+    );
 
 
 
-}
 
-catch(e){
+    res.json({
 
+      grandTotal:
 
-res.status(500).json({
+        result[0].grandTotal || 0
 
-error:e.message
-
-});
+    });
 
 
-}
+
+  }
+
+  catch (e) {
+
+
+    res.status(500).json({
+
+      error: e.message
+
+    });
+
+
+  }
 
 
 
@@ -3015,14 +3058,14 @@ error:e.message
 // ================= VEHICLE FINANCIALS =================
 
 
-app.get('/api/vehicle-financials/:vehicleId',(req,res)=>{
+app.get('/api/vehicle-financials/:vehicleId', (req, res) => {
 
 
-const vehicleId=req.params.vehicleId;
+  const vehicleId = req.params.vehicleId;
 
 
 
-const sql=`
+  const sql = `
 
 SELECT
 
@@ -3071,34 +3114,34 @@ WHERE vehicle_id=?
 
 
 
-db.query(
+  db.query(
 
-sql,
+    sql,
 
-[vehicleId],
+    [vehicleId],
 
-(err,result)=>{
-
-
-if(err){
-
-console.log(err);
-
-return res.status(500).send(err);
-
-}
+    (err, result) => {
 
 
+      if (err) {
 
+        console.log(err);
 
-res.json(result[0]);
+        return res.status(500).send(err);
 
-
-}
+      }
 
 
 
-);
+
+      res.json(result[0]);
+
+
+    }
+
+
+
+  );
 
 
 
@@ -3118,25 +3161,25 @@ res.json(result[0]);
 // ================= ADD MANUAL SCHEDULE =================
 
 
-app.post("/api/add-schedule",(req,res)=>{
+app.post("/api/add-schedule", (req, res) => {
 
 
-const {
+  const {
 
-shop_id,
+    shop_id,
 
-vehicle_id,
+    vehicle_id,
 
-collection_date,
+    collection_date,
 
-collection_time
+    collection_time
 
-}=req.body;
-
-
+  } = req.body;
 
 
-const sql=`
+
+
+  const sql = `
 
 INSERT INTO collection_schedule
 
@@ -3163,53 +3206,53 @@ VALUES
 
 
 
-db.query(
+  db.query(
 
-sql,
+    sql,
 
-[
+    [
 
-shop_id,
+      shop_id,
 
-vehicle_id,
+      vehicle_id,
 
-collection_date,
+      collection_date,
 
-collection_time
+      collection_time
 
-],
-
-
-(err)=>{
+    ],
 
 
-if(err){
-
-return res.status(500).json({
-
-status:"error",
-
-message:err.message
-
-});
-
-}
+    (err) => {
 
 
+      if (err) {
 
-res.json({
+        return res.status(500).json({
 
-status:"success"
+          status: "error",
 
-});
+          message: err.message
+
+        });
+
+      }
 
 
 
-}
+      res.json({
+
+        status: "success"
+
+      });
 
 
 
-);
+    }
+
+
+
+  );
 
 
 
@@ -3231,10 +3274,10 @@ status:"success"
 // ======================================
 
 
-app.get("/api/calendar-shops",(req,res)=>{
+app.get("/api/calendar-shops", (req, res) => {
 
 
-const sql=`
+  const sql = `
 
 SELECT
 
@@ -3273,45 +3316,45 @@ ORDER BY cs.collection_date ASC
 
 
 
-db.query(
+  db.query(
 
-sql,
+    sql,
 
-(err,results)=>{
-
-
-if(err){
+    (err, results) => {
 
 
-return res.status(500).json({
-
-status:"error",
-
-message:err.message
-
-});
+      if (err) {
 
 
+        return res.status(500).json({
 
-}
+          status: "error",
+
+          message: err.message
+
+        });
 
 
 
-res.json({
-
-status:"success",
-
-data:results
-
-});
+      }
 
 
 
-}
+      res.json({
+
+        status: "success",
+
+        data: results
+
+      });
 
 
 
-);
+    }
+
+
+
+  );
 
 
 
@@ -3331,14 +3374,14 @@ data:results
 // ================= CALENDAR BY DATE =================
 
 
-app.get("/api/calendar/:date",(req,res)=>{
+app.get("/api/calendar/:date", (req, res) => {
 
 
-const date=req.params.date;
+  const date = req.params.date;
 
 
 
-const sql=`
+  const sql = `
 
 SELECT
 
@@ -3382,48 +3425,48 @@ ORDER BY s.shop_name
 
 
 
-db.query(
+  db.query(
 
-sql,
+    sql,
 
-[date],
+    [date],
 
-(err,results)=>{
-
-
-if(err){
+    (err, results) => {
 
 
-return res.status(500).json({
-
-status:"error",
-
-message:err.message
-
-});
+      if (err) {
 
 
+        return res.status(500).json({
 
-}
+          status: "error",
+
+          message: err.message
+
+        });
 
 
 
-
-res.json({
-
-status:"success",
-
-data:results
-
-});
+      }
 
 
 
-}
+
+      res.json({
+
+        status: "success",
+
+        data: results
+
+      });
 
 
 
-);
+    }
+
+
+
+  );
 
 
 
@@ -3443,14 +3486,14 @@ data:results
 // ================= ROOT TEST =================
 
 
-app.get('/',(req,res)=>{
+app.get('/', (req, res) => {
 
 
-res.status(200).send(
+  res.status(200).send(
 
-'Cash Collector Backend is Running!'
+    'Cash Collector Backend is Running!'
 
-);
+  );
 
 
 });
@@ -3480,29 +3523,29 @@ module.exports = app;
 
 // Local run only
 
-if(require.main === module){
+if (require.main === module) {
 
 
-server.listen(
+  server.listen(
 
-PORT,
+    PORT,
 
-HOST,
+    HOST,
 
-()=>{
-
-
-console.log(
-
-`Server running on http://${HOST}:${PORT}`
-
-);
+    () => {
 
 
-}
+      console.log(
+
+        `Server running on http://${HOST}:${PORT}`
+
+      );
 
 
-);
+    }
+
+
+  );
 
 
 }
