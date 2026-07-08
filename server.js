@@ -3201,14 +3201,97 @@ ORDER BY cs.collection_date ASC
 
 
 
+// ===============================
+// ASSIGN VEHICLE TO SHOP
+// ===============================
+app.put("/api/assign-vehicle/:shop_id", (req, res) => {
+
+    const shop_id = req.params.shop_id;
+    const { vehicle_id } = req.body;
+
+
+    const sql = `
+        UPDATE shops 
+        SET vehicle_id = ?
+        WHERE shop_id = ?
+    `;
+
+
+    db.query(sql, [vehicle_id, shop_id], (err, result)=>{
+
+        if(err){
+            console.log(err);
+            return res.json({
+                status:"error",
+                message:"Vehicle assign failed"
+            });
+        }
+
+
+        res.json({
+            status:"success",
+            message:"Vehicle assigned successfully"
+        });
+
+    });
+
+});
 
 
 
 
 
 
+app.put("/api/assign-vehicle/:shop_id",(req,res)=>{
 
 
+const shop_id=req.params.shop_id;
+
+const vehicle_id=req.body.vehicle_id;
+
+
+
+db.query(
+
+`
+UPDATE collection_schedule
+SET vehicle_id=?
+WHERE shop_id=?
+`,
+
+[
+vehicle_id,
+shop_id
+],
+
+(err,result)=>{
+
+
+if(err){
+
+console.log(err);
+
+return res.json({
+status:"error"
+});
+
+}
+
+
+res.json({
+
+status:"success"
+
+});
+
+
+}
+
+
+);
+
+
+});
 
 // ================= CALENDAR BY DATE =================
 
