@@ -23,8 +23,6 @@ console.log("API KEY =", process.env.GOOGLE_MAPS_API_KEY);
 
 
 
-
-
 // ================= DATABASE =================
 const db = mysql.createPool({
   host: 'payslip.lk',
@@ -431,6 +429,20 @@ app.post("/api/add-shop", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //===== Get Shop (Updated with s.is_collected) =====//
 app.get('/get-shops', (req, res) => {
 const sql = `
@@ -480,6 +492,181 @@ ON s.shop_id = vsm.shop_id
   });
 });
 
+
+// ================= ACTIVE TASK SUMMARY =================
+
+app.get('/api/active-task-summary', (req,res)=>{
+
+  const sql = `
+
+  SELECT
+
+  COUNT(DISTINCT v.vehicle_id) AS activeVehicles,
+
+  COUNT(vsm.shop_id) AS totalAssigned,
+
+  SUM(CASE WHEN s.is_collected = 1 THEN 1 ELSE 0 END) AS completed,
+
+  SUM(CASE WHEN s.is_collected = 0 THEN 1 ELSE 0 END) AS pending
+
+  FROM vehicles v
+
+  LEFT JOIN vehicle_shop_map vsm
+  ON v.vehicle_id = vsm.vehicle_id
+
+  LEFT JOIN shops s
+  ON s.shop_id = vsm.shop_id
+
+  `;
+
+
+  db.query(sql,(err,result)=>{
+
+    if(err){
+      return res.status(500).json({
+        status:"error",
+        message:err.message
+      });
+    }
+
+
+    res.json({
+      status:"success",
+      data:result[0]
+    });
+
+  });
+
+
+});
+
+
+
+
+// ================= ACTIVE VEHICLE TASKS =================
+
+
+app.get('/api/active-tasks',(req,res)=>{
+
+
+const sql = `
+
+SELECT
+
+v.vehicle_id,
+v.vehicle_number,
+
+COUNT(s.shop_id) AS total_shops,
+
+SUM(
+CASE 
+WHEN s.is_collected = 1 THEN 1
+ELSE 0
+END
+) AS completed
+
+
+FROM vehicles v
+
+
+LEFT JOIN vehicle_shop_map vsm
+
+ON v.vehicle_id=vsm.vehicle_id
+
+
+LEFT JOIN shops s
+
+ON s.shop_id=vsm.shop_id
+
+
+GROUP BY v.vehicle_id
+
+
+`;
+
+
+db.query(sql,(err,result)=>{
+
+
+if(err){
+return res.status(500).json({
+status:"error"
+});
+}
+
+
+res.json({
+
+status:"success",
+
+data:result
+
+});
+
+
+});
+
+
+});
+
+
+
+
+
+// ================= TODAY COLLECTION =================
+
+
+app.get('/api/today-collection',(req,res)=>{
+
+
+const today = new Date()
+.toISOString()
+.split("T")[0];
+
+
+db.query(
+
+`
+SELECT SUM(total) AS amount
+
+FROM transactions
+
+WHERE DATE(timestamp)=?
+
+AND action='Collect Cash'
+
+`,
+
+[today],
+
+
+(err,result)=>{
+
+
+if(err){
+
+return res.status(500).json({
+status:"error"
+});
+
+}
+
+
+res.json({
+
+amount:
+result[0].amount || 0
+
+});
+
+
+}
+
+
+);
+
+
+});
 
 
 
@@ -901,6 +1088,84 @@ app.get('/api/vehicle-financials/:vehicleId', (req, res) => {
         res.json(result[0]);
     });
 });
+
+
+// ======================================
+// CALENDAR SHOPS
+// ======================================
+app.get("/api/calendar-shops", (req, res) => {
+
+    const sql = `
+        SELECT
+            cs.schedule_id,
+            cs.collection_date,
+            cs.status,
+            cs.vehicle_id,
+            s.shop_id,
+            s.shop_name,
+            s.address
+        FROM collection_schedule cs
+        INNER JOIN shops s
+        ON cs.shop_id = s.shop_id
+        ORDER BY cs.collection_date ASC
+    `;
+
+    db.query(sql, (err, results) => {
+
+        if (err) {
+            return res.status(500).json({
+                status: "error",
+                message: err.message
+            });
+        }
+
+        res.json({
+            status: "success",
+            data: results
+        });
+
+    });
+
+});
+
+app.get("/api/calendar/:date", (req, res) => {
+
+    const { date } = req.params;
+
+    const sql = `
+        SELECT
+            cs.schedule_id,
+            cs.collection_date,
+            cs.status,
+            cs.vehicle_id,
+            s.shop_id,
+            s.shop_name,
+            s.address
+        FROM collection_schedule cs
+        INNER JOIN shops s
+        ON cs.shop_id = s.shop_id
+        WHERE cs.collection_date = ?
+        ORDER BY s.shop_name
+    `;
+
+    db.query(sql, [date], (err, results) => {
+
+        if (err) {
+            return res.status(500).json({
+                status: "error",
+                message: err.message
+            });
+        }
+
+        res.json({
+            status: "success",
+            data: results
+        });
+
+    });
+
+});
+
 // ================= START SERVER =================
 module.exports = app;
 
