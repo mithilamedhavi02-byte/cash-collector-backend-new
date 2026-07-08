@@ -371,97 +371,6 @@ AND password=?
 // ================= ADD VEHICLE =================
 
 
-app.post('/add-vehicle',
-  (req, res) => {
-
-
-    const {
-
-      vehicle_number,
-
-      vehicle_model,
-
-      username,
-
-      password
-
-
-    } = req.body;
-
-
-
-
-    const sql = `
-
-INSERT INTO vehicles
-
-(
-vehicle_number,
-vehicle_model,
-username,
-password
-)
-
-VALUES
-(?,?,?,?)
-
-`;
-
-
-
-
-    db.query(
-
-      sql,
-
-      [
-        vehicle_number,
-        vehicle_model,
-        username,
-        password
-      ],
-
-
-      (err, result) => {
-
-
-        if (err) {
-
-          return res.status(500).json({
-
-            status: "error",
-
-            message: err.message
-
-          });
-
-
-        }
-
-
-
-
-        res.json({
-
-          status: "success",
-
-          vehicle_id:
-            result.insertId
-
-
-        });
-
-
-      }
-
-
-    );
-
-
-
-  });
-
-
 
 
 
@@ -675,36 +584,6 @@ app.post('/add-vehicle', (req, res) => {
 
 
 
-app.get('/api/vehicles', (req, res) => {
-
-
-  db.query(
-
-    "SELECT * FROM vehicles",
-
-    (err, results) => {
-
-
-      if (err)
-
-        return res.status(500).json({
-          status: "error"
-        });
-
-
-      res.json({
-
-        status: "success",
-
-        data: results
-
-      });
-
-
-    });
-
-
-});
 
 
 
@@ -721,37 +600,6 @@ app.get('/api/vehicles', (req, res) => {
 
 
 
-
-app.delete('/delete-vehicle/:id', (req, res) => {
-
-
-  db.query(
-
-    "DELETE FROM vehicles WHERE vehicle_id=?",
-
-    [req.params.id],
-
-    (err) => {
-
-
-      if (err)
-
-        return res.status(500).json({
-          status: "error"
-        });
-
-
-      res.json({
-
-        status: "success"
-
-      });
-
-
-    });
-
-
-});
 
 
 
@@ -3282,30 +3130,21 @@ app.get("/api/calendar-shops", (req, res) => {
 SELECT
 
 cs.schedule_id,
-
 cs.collection_date,
-
 cs.status,
-
 cs.vehicle_id,
 
 s.shop_id,
-
 s.shop_name,
-
-s.address
-
-
+s.address,
+s.phone,
+s.lat,
+s.lng
 
 FROM collection_schedule cs
 
-
-
 INNER JOIN shops s
-
 ON cs.shop_id=s.shop_id
-
-
 
 ORDER BY cs.collection_date ASC
 
@@ -3376,100 +3215,56 @@ ORDER BY cs.collection_date ASC
 
 app.get("/api/calendar/:date", (req, res) => {
 
-
   const date = req.params.date;
 
-
-
   const sql = `
-
 SELECT
-
-
-cs.schedule_id,
-
-cs.collection_date,
-
-cs.status,
-
-cs.vehicle_id,
-
-s.shop_id,
-
-s.shop_name,
-
-s.address
-
-
-
+    cs.schedule_id,
+    cs.collection_date,
+    cs.status,
+    cs.vehicle_id,
+    s.shop_id,
+    s.shop_name,
+    s.address,
+    s.phone,
+    s.lat,
+    s.lng
 FROM collection_schedule cs
-
-
-
 INNER JOIN shops s
-
-ON cs.shop_id=s.shop_id
-
-
-
-WHERE cs.collection_date=?
-
-
-
+    ON cs.shop_id = s.shop_id
+WHERE cs.collection_date = ?
 ORDER BY s.shop_name
-
-
 `;
 
 
 
 
 
-  db.query(
-
-    sql,
-
-    [date],
-
-    (err, results) => {
-
-
-      if (err) {
-
-
-        return res.status(500).json({
-
-          status: "error",
-
-          message: err.message
-
-        });
-
-
-
-      }
 
 
 
 
-      res.json({
+ 
+  db.query(sql, [date], (err, results) => {
 
-        status: "success",
+    if (err) {
+      console.log(err);
 
-        data: results
-
+      return res.status(500).json({
+        status: "error",
+        message: err.message,
       });
-
-
-
     }
 
 
 
-  );
 
-
-
+   
+    res.json({
+      status: "success",
+      data: results,
+    });
+  });
 });
 
 
