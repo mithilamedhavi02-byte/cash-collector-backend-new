@@ -1102,22 +1102,21 @@ VALUES ?
 
 
 
-              scheduleValues.push([
+           scheduleValues.push([
 
+ shopId,
 
-                shopId,
+ null,
 
-                null,
+ shopName,
 
-                formattedDate,
+ formattedDate,
 
-                collection_time,
+ collection_time,
 
-                "Pending"
+ "Pending"
 
-
-              ]);
-
+]);
 
 
             }
@@ -1171,19 +1170,13 @@ scheduleValues
               `
 
 INSERT INTO collection_schedule
-
 (
-
 shop_id,
-
 vehicle_id,
-
+shop_name,
 collection_date,
-
 collection_time,
-
 status
-
 )
 
 VALUES ?
@@ -3384,7 +3377,9 @@ await db.query(
 
 `
 UPDATE collection_schedule
-SET vehicle_id=?
+SET
+vehicle_id=?,
+status='Assigned'
 WHERE shop_id=?
 `,
 
@@ -3443,7 +3438,7 @@ SELECT
     s.phone,
     s.lat,
     s.lng,
-    s.is_collected 
+    s.is_collected
 FROM collection_schedule cs
 INNER JOIN shops s
     ON cs.shop_id = s.shop_id
