@@ -3199,59 +3199,188 @@ ORDER BY cs.collection_date ASC
 
 });
 
+// ================= ACTIVE VEHICLES =================
 
+app.get("/api/active-vehicles", (req, res) => {
 
+  const sql = `
+    SELECT
+      COUNT(DISTINCT cs.vehicle_id) AS activeVehicles
+    FROM collection_schedule cs
+    INNER JOIN (
+      SELECT
+        vehicle_id,
+        MAX(created_at) AS last_update
+      FROM vehicle_locations
+      GROUP BY vehicle_id
+    ) vl
+      ON cs.vehicle_id = vl.vehicle_id
+    WHERE cs.collection_date = CURDATE()
+      AND cs.vehicle_id IS NOT NULL
+      AND vl.last_update >= NOW() - INTERVAL 5 MINUTE
+  `;
+
+  db.query(sql, (err, result) => {
+
+    if (err) {
+
+      console.log(err);
+
+      return res.status(500).json({
+        status: "error",
+        message: err.message
+      });
+
+    }
+
+    res.json({
+      status: "success",
+      activeVehicles: result[0].activeVehicles
+    });
+
+  });
+
+});
+app.get("/api/assigned-shops-count", (req, res) => {
+
+  const sql = `
+    SELECT COUNT(*) AS totalAssigned
+    FROM vehicle_shop_map
+  `;
+
+  db.query(sql, (err, result) => {
+
+    if (err) {
+
+      return res.status(500).json({
+        status: "error"
+      });
+
+    }
+
+    res.json({
+      status: "success",
+      totalAssigned: result[0].totalAssigned
+    });
+
+  });
+
+});
 // ===============================
 // ASSIGN VEHICLE TO SHOP
 // ===============================
-app.put("/api/assign-vehicle/:shop_id", (req, res) => {
-
-    const shop_id = req.params.shop_id;
-    const { vehicle_id } = req.body;
+app.put("/api/assign-multiple",(req,res)=>{
 
 
-    const sql = `
-        UPDATE shops 
-        SET vehicle_id = ?
-        WHERE shop_id = ?
-    `;
+const {
+vehicle_id,
+shops
+}=req.body;
 
 
-    db.query(sql, [vehicle_id, shop_id], (err, result)=>{
 
-        if(err){
-            console.log(err);
-            return res.json({
-                status:"error",
-                message:"Vehicle assign failed"
-            });
-        }
+if(!vehicle_id || !shops || shops.length===0){
 
+return res.status(400).json({
 
-        res.json({
-            status:"success",
-            message:"Vehicle assigned successfully"
-        });
-
-    });
+status:"error",
+message:"Invalid data"
 
 });
 
+}
 
 
 
+const values = shops.map(shop_id=>[
+
+vehicle_id,
+shop_id
+
+]);
 
 
-app.put("/api/assign-vehicle/:shop_id",(req,res)=>{
 
+const sql = `
 
-const shop_id=req.params.shop_id;
+INSERT INTO vehicle_shop_map
 
-const vehicle_id=req.body.vehicle_id;
+(vehicle_id,shop_id)
+
+VALUES ?
+
+ON DUPLICATE KEY UPDATE
+
+vehicle_id = VALUES(vehicle_id)
+
+`;
 
 
 
 db.query(
+
+sql,
+
+[values],
+
+(err,result)=>{
+
+
+if(err){
+
+console.log(err);
+
+
+return res.status(500).json({
+
+status:"error",
+
+message:err.message
+
+});
+
+
+}
+
+
+
+res.json({
+
+status:"success",
+
+message:"Vehicle assigned successfully"
+
+});
+
+
+}
+
+
+
+);
+
+
+
+});
+
+//=================================//
+app.put("/api/assign-multiple", async(req,res)=>{
+
+
+const {
+vehicle_id,
+shops
+}=req.body;
+
+
+
+try{
+
+
+for(let shop_id of shops){
+
+
+await db.query(
 
 `
 UPDATE collection_schedule
@@ -3262,20 +3391,13 @@ WHERE shop_id=?
 [
 vehicle_id,
 shop_id
-],
+]
 
-(err,result)=>{
+);
 
-
-if(err){
-
-console.log(err);
-
-return res.json({
-status:"error"
-});
 
 }
+
 
 
 res.json({
@@ -3286,13 +3408,22 @@ status:"success"
 
 
 }
+catch(err){
+
+console.log(err);
 
 
-);
+res.status(500).json({
 
+status:"error"
 
 });
 
+
+}
+
+
+});
 // ================= CALENDAR BY DATE =================
 
 
@@ -3317,18 +3448,7 @@ INNER JOIN shops s
     ON cs.shop_id = s.shop_id
 WHERE cs.collection_date = ?
 ORDER BY s.shop_name
-`;
-
-
-
-
-
-
-
-
-
- 
-  db.query(sql, [date], (err, results) => {
+`;  db.query(sql, [date], (err, results) => {
 
     if (err) {
       console.log(err);
@@ -3337,29 +3457,12 @@ ORDER BY s.shop_name
         status: "error",
         message: err.message,
       });
-    }
-
-
-
-
-   
-    res.json({
+    }res.json({
       status: "success",
       data: results,
     });
   });
 });
-
-
-
-
-
-
-
-
-
-
-
 
 // ================= ROOT TEST =================
 
@@ -3374,27 +3477,10 @@ app.get('/', (req, res) => {
   );
 
 
-});
-
-
-
-
-
-
-
-
-
-// ================= EXPORT =================
+});// ================= EXPORT =================
 
 
 module.exports = app;
-
-
-
-
-
-
-
 
 
 // ================= START SERVER =================
