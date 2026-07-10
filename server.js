@@ -3443,7 +3443,7 @@ SELECT
     s.phone,
     s.lat,
     s.lng,
-    
+    s.is_collected 
 FROM collection_schedule cs
 INNER JOIN shops s
     ON cs.shop_id = s.shop_id
