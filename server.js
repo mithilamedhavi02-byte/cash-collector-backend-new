@@ -3262,161 +3262,52 @@ app.get("/api/assigned-shops-count", (req, res) => {
 // ===============================
 // ASSIGN VEHICLE TO SHOP
 // ===============================
-app.put("/api/assign-multiple",(req,res)=>{
-
-
-const {
-vehicle_id,
-shops
-}=req.body;
-
-
-
-if(!vehicle_id || !shops || shops.length===0){
-
-return res.status(400).json({
-
-status:"error",
-message:"Invalid data"
-
-});
-
-}
-
-
-
-const values = shops.map(shop_id=>[
-
-vehicle_id,
-shop_id
-
-]);
-
-
-
-const sql = `
-
-INSERT INTO vehicle_shop_map
-
-(vehicle_id,shop_id)
-
-VALUES ?
-
-ON DUPLICATE KEY UPDATE
-
-vehicle_id = VALUES(vehicle_id)
-
-`;
-
-
-
-db.query(
-
-sql,
-
-[values],
-
-(err,result)=>{
-
-
-if(err){
-
-console.log(err);
-
-
-return res.status(500).json({
-
-status:"error",
-
-message:err.message
-
-});
-
-
-}
-
-
-
-res.json({
-
-status:"success",
-
-message:"Vehicle assigned successfully"
-
-});
-
-
-}
-
-
-
-);
-
-
-
-});
-
-//=================================//
-app.put("/api/assign-multiple", async(req,res)=>{
-
-
-const {
-vehicle_id,
-shops
-}=req.body;
-
-
-
-try{
-
-
-for(let shop_id of shops){
-
-
-await db.query(
-
-`
-UPDATE collection_schedule
-SET
-vehicle_id=?,
-status='Assigned'
-WHERE shop_id=?
-`,
-
-[
-vehicle_id,
-shop_id
-]
-
-);
-
-
-}
-
-
-
-res.json({
-
-status:"success"
-
-});
-
-
-}
-catch(err){
-
-console.log(err);
-
-
-res.status(500).json({
-
-status:"error"
-
-});
-
-
-}
-
+app.put("/api/assign-multiple", async (req, res) => {
+
+  const { vehicle_id, shops } = req.body;
+
+  try {
+
+    // vehicle_shop_map update
+    const values = shops.map(shop_id => [vehicle_id, shop_id]);
+
+    await db.promise().query(
+      `
+      INSERT INTO vehicle_shop_map
+      (vehicle_id, shop_id)
+      VALUES ?
+      ON DUPLICATE KEY UPDATE
+      vehicle_id = VALUES(vehicle_id)
+      `,
+      [values]
+    );
+
+    // collection_schedule update
+    await db.promise().query(
+      `
+      UPDATE collection_schedule
+      SET
+        vehicle_id = ?,
+        status = 'Assigned'
+      WHERE shop_id IN (?)
+      `,
+      [vehicle_id, shops]
+    );
+
+    res.json({
+      status: "success"
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      status: "error",
+      message: err.message
+    });
+
+  }
 
 });
 // ================= CALENDAR BY DATE =================
