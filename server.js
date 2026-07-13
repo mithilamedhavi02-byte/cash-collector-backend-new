@@ -1108,7 +1108,7 @@ VALUES ?
 
  null,
 
- shopName,
+name,
 
  formattedDate,
 
@@ -3265,7 +3265,21 @@ app.get("/api/assigned-shops-count", (req, res) => {
 app.put("/api/assign-multiple", async (req, res) => {
 
   const { vehicle_id, shops } = req.body;
+const [existing] = await db.promise().query(
+  `
+  SELECT shop_id
+  FROM vehicle_shop_map
+  WHERE shop_id IN (?)
+  `,
+  [shops]
+);
 
+if (existing.length > 0) {
+  return res.status(400).json({
+    status: "exists",
+    message: "One or more selected shops are already assigned to a vehicle."
+  });
+}
   try {
 
     // vehicle_shop_map update
