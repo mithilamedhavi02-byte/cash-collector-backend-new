@@ -3274,7 +3274,7 @@ FROM collection_schedule
 
 WHERE shop_id IN (?)
 
-AND collection_date = CURDATE()
+AND collection_date = ?
 
 AND vehicle_id IS NOT NULL
 
@@ -3315,23 +3315,28 @@ for (const shop_id of shops) {
 
     `
     UPDATE collection_schedule
+
     SET vehicle_id = ?
 
     WHERE shop_id = ?
 
-    AND collection_date >= CURDATE()
+    AND collection_date = ?
 
-    AND vehicle_id IS NULL
     `,
 
     [
       vehicle_id,
-      shop_id
+      shop_id,
+      req.body.collection_date
     ]
 
   );
 
 }
+
+
+
+
     res.json({
       status: "success"
     });
