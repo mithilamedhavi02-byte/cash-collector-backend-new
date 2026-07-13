@@ -3266,12 +3266,22 @@ app.put("/api/assign-multiple", async (req, res) => {
 
   const { vehicle_id, shops } = req.body;
 const [existing] = await db.promise().query(
-  `
-  SELECT shop_id
-  FROM vehicle_shop_map
-  WHERE shop_id IN (?)
-  `,
-  [shops]
+
+`
+SELECT shop_id
+
+FROM collection_schedule
+
+WHERE shop_id IN (?)
+
+AND collection_date = CURDATE()
+
+AND vehicle_id IS NOT NULL
+
+`,
+
+[shops]
+
 );
 
 if (existing.length > 0) {
@@ -3297,17 +3307,31 @@ if (existing.length > 0) {
     );
 
     // collection_schedule update
-    await db.promise().query(
-      `
-      UPDATE collection_schedule
-      SET
-        vehicle_id = ?,
-        status = 'Assigned'
-      WHERE shop_id IN (?)
-      `,
-      [vehicle_id, shops]
-    );
+  // collection_schedule update
 
+for (const shop_id of shops) {
+
+  await db.promise().query(
+
+    `
+    UPDATE collection_schedule
+    SET vehicle_id = ?
+
+    WHERE shop_id = ?
+
+    AND collection_date >= CURDATE()
+
+    AND vehicle_id IS NULL
+    `,
+
+    [
+      vehicle_id,
+      shop_id
+    ]
+
+  );
+
+}
     res.json({
       status: "success"
     });
