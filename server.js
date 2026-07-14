@@ -500,6 +500,47 @@ WHERE vehicle_id=?
 
 
 
+// ================= UPDATE VEHICLE =================
+
+app.put("/update-vehicle/:id", (req, res) => {
+
+  const { username, password } = req.body;
+
+  db.query(
+
+    `
+    UPDATE vehicles
+    SET
+    username=?,
+    password=?
+    WHERE vehicle_id=?
+    `,
+
+    [
+      username,
+      password,
+      req.params.id
+    ],
+
+    (err) => {
+
+      if (err) {
+
+        return res.status(500).json({
+          status: "error"
+        });
+
+      }
+
+      res.json({
+        status: "success"
+      });
+
+    }
+
+  );
+
+});
 
 
 
@@ -515,8 +556,44 @@ WHERE vehicle_id=?
 
 
 
+// ================= GET SINGLE VEHICLE =================
 
+app.get("/api/vehicle/:id", (req, res) => {
 
+  db.query(
+
+    "SELECT * FROM vehicles WHERE vehicle_id=?",
+
+    [req.params.id],
+
+    (err, result) => {
+
+      if (err) {
+
+        return res.status(500).json({
+          status: "error"
+        });
+
+      }
+
+      if (result.length === 0) {
+
+        return res.status(404).json({
+          status: "not_found"
+        });
+
+      }
+
+      res.json({
+        status: "success",
+        data: result[0]
+      });
+
+    }
+
+  );
+
+});
 
 
 // ================= VEHICLES =================
@@ -3001,101 +3078,90 @@ WHERE vehicle_id=?
 
 // ================= ADD MANUAL SCHEDULE =================
 
+// ================= ADD EXTRA COLLECTION =================
 
-app.post("/api/add-schedule", (req, res) => {
+app.post("/api/add-schedule", async (req, res) => {
 
+  try {
 
-  const {
-
-    shop_id,
-
-    vehicle_id,
-
-    collection_date,
-
-    collection_time
-
-  } = req.body;
-
-
-
-
-  const sql = `
-
-INSERT INTO collection_schedule
-
-(
-
-shop_id,
-
-vehicle_id,
-
-collection_date,
-
-collection_time,
-
-status
-
-)
-
-VALUES
-
-(?,?,?,?, 'Pending')
-
-`;
-
-
-
-
-  db.query(
-
-    sql,
-
-    [
-
+    const {
       shop_id,
-
       vehicle_id,
-
       collection_date,
-
       collection_time
+    } = req.body;
 
-    ],
+    // Shop Name ගන්නවා
+    const [shop] = await db.promise().query(
+      `SELECT shop_name FROM shops WHERE shop_id=?`,
+      [shop_id]
+    );
 
-
-    (err) => {
-
-
-      if (err) {
-
-        return res.status(500).json({
-
-          status: "error",
-
-          message: err.message
-
-        });
-
-      }
-
-
-
-      res.json({
-
-        status: "success"
-
+    if (shop.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Shop not found"
       });
-
-
-
     }
 
+    // මේ date එකට දැනට schedule එකක් තියෙනවද බලනවා
+    const [existing] = await db.promise().query(
+      `
+      SELECT *
+      FROM collection_schedule
+      WHERE shop_id=?
+      AND collection_date=?
+      `,
+      [shop_id, collection_date]
+    );
 
+    if (existing.length > 0) {
+      return res.json({
+        status: "exists",
+        message: "Schedule already exists for this date."
+      });
+    }
 
-  );
+    await db.promise().query(
 
+      `
+      INSERT INTO collection_schedule
+      (
+        shop_id,
+        vehicle_id,
+        shop_name,
+        collection_date,
+        collection_time,
+        status
+      )
+      VALUES (?,?,?,?,?,?)
+      `,
 
+      [
+        shop_id,
+        vehicle_id || null,
+        shop[0].shop_name,
+        collection_date,
+        collection_time,
+        "Pending"
+      ]
+
+    );
+
+    res.json({
+      status: "success"
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      status: "error",
+      message: err.message
+    });
+
+  }
 
 });
 
