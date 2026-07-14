@@ -3330,92 +3330,137 @@ app.get("/api/assigned-shops-count", (req, res) => {
 // ===============================
 
 app.put("/api/assign-multiple", async (req, res) => {
+
   console.log("BODY :", req.body);
 
-  const { vehicle_id, shops } = req.body;
-const [existing] = await db.promise().query(
-
-`
-SELECT shop_id
-
-FROM collection_schedule
-
-WHERE shop_id IN (?)
-
-AND collection_date = ?
-
-AND vehicle_id IS NOT NULL
-
-`,
-
-[shops]
-
-);
-
-if (existing.length > 0) {
-  return res.status(400).json({
-    status: "exists",
-    message: "One or more selected shops are already assigned to a vehicle."
-  });
-}
   try {
 
-    // vehicle_shop_map update
-    const values = shops.map(shop_id => [vehicle_id, shop_id]);
+    const { 
+      vehicle_id, 
+      shops,
+      collection_date
+    } = req.body;
 
-    await db.promise().query(
-      `
-      INSERT INTO vehicle_shop_map
-      (vehicle_id, shop_id)
-      VALUES ?
-      ON DUPLICATE KEY UPDATE
-      vehicle_id = VALUES(vehicle_id)
-      `,
-      [values]
-    );
 
-    // collection_schedule update
-  // collection_schedule update
+    if(
+      !vehicle_id ||
+      !shops ||
+      !Array.isArray(shops)
+    ){
 
-for (const shop_id of shops) {
+      return res.status(400).json({
+        status:"error",
+        message:"Invalid data"
+      });
 
-  await db.promise().query(
+    }
+
+
+    const [existing] = await db.promise().query(
 
     `
-    UPDATE collection_schedule
+    SELECT shop_id
 
-    SET vehicle_id = ?
+    FROM collection_schedule
 
-    WHERE shop_id = ?
+    WHERE shop_id IN (?)
 
     AND collection_date = ?
+
+    AND vehicle_id IS NOT NULL
 
     `,
 
     [
-      vehicle_id,
-      shop_id,
-      req.body.collection_date
+      shops,
+      collection_date
     ]
 
-  );
+    );
 
-}
 
+    if(existing.length > 0){
+
+      return res.status(400).json({
+
+        status:"exists",
+
+        message:
+        "One or more selected shops already assigned."
+
+      });
+
+    }
+
+
+
+    const values =
+    shops.map(shop_id=>[
+      vehicle_id,
+      shop_id
+    ]);
+
+
+
+    await db.promise().query(
+
+    `
+    INSERT INTO vehicle_shop_map
+    (vehicle_id,shop_id)
+
+    VALUES ?
+
+    ON DUPLICATE KEY UPDATE
+    vehicle_id=VALUES(vehicle_id)
+
+    `,
+
+    [values]
+
+    );
+
+
+
+    for(const shop_id of shops){
+
+      await db.promise().query(
+
+      `
+      UPDATE collection_schedule
+
+      SET vehicle_id=?
+
+      WHERE shop_id=?
+
+      AND collection_date=?
+
+      `,
+
+      [
+        vehicle_id,
+        shop_id,
+        collection_date
+      ]
+
+      );
+
+    }
 
 
 
     res.json({
-      status: "success"
+      status:"success"
     });
 
-  } catch (err) {
+
+
+  } catch(err){
 
     console.log(err);
 
     res.status(500).json({
-      status: "error",
-      message: err.message
+      status:"error",
+      message:err.message
     });
 
   }
