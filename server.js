@@ -3556,3 +3556,23 @@ if (require.main === module) {
 
 
 }
+app.get("/api/vehicles/:id", (req,res)=>{
+
+ const id = req.params.id;
+
+ db.query(
+  "SELECT * FROM vehicles WHERE vehicle_id=?",
+  [id],
+  (err,result)=>{
+
+    if(err)
+      return res.status(500).json({error:err});
+
+    res.json({
+      data: result[0]
+    });
+
+  }
+ );
+
+});
