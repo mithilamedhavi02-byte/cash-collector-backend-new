@@ -3328,7 +3328,9 @@ app.get("/api/assigned-shops-count", (req, res) => {
 // ===============================
 // ASSIGN VEHICLE TO SHOP
 // ===============================
+
 app.put("/api/assign-multiple", async (req, res) => {
+  console.log("BODY :", req.body);
 
   const { vehicle_id, shops } = req.body;
 const [existing] = await db.promise().query(
