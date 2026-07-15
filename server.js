@@ -303,7 +303,14 @@ WHERE username=?
 AND password=?
 
 `,
-
+{
+   "status":"success",
+   "role":"driver",
+   "data":{
+      "vehicle_id":3,
+      "vehicle_number":"CAB-1234"
+   }
+}
           [
             username,
             password
@@ -2348,7 +2355,12 @@ app.post('/update-location', (req, res) => {
 
   } = req.body;
 
-
+console.log("========== LOCATION API ==========");
+console.log("BODY =", req.body);
+console.log("Vehicle =", vehicle_id);
+console.log("Latitude =", latitude);
+console.log("Longitude =", longitude);
+console.log("==================================");
 
   const sql =
 
@@ -2384,7 +2396,8 @@ VALUES (?,?,?,NOW())
 
 
       if (err)
-
+ console.log("❌ DB ERROR");
+   console.log(err);
         return res.status(500).send(
           "Database error"
         );
@@ -2409,7 +2422,7 @@ VALUES (?,?,?,NOW())
 
 
 
-
+console.log("✅ Location Saved Successfully");
 
       res.send({
 
@@ -2434,7 +2447,37 @@ VALUES (?,?,?,NOW())
 
 
 
+app.delete("/api/clear-route/:vehicleId", async(req,res)=>{
 
+ const vehicleId = req.params.vehicleId;
+
+
+ try{
+
+   await db.query(
+     "DELETE FROM vehicle_locations WHERE vehicle_id=?",
+     [vehicleId]
+   );
+
+
+   res.json({
+     success:true,
+     message:"Route cleared"
+   });
+
+
+ }catch(error){
+
+   console.log(error);
+
+   res.status(500).json({
+     success:false,
+     error:error.message
+   });
+
+ }
+
+});
 
 
 
